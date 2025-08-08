@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ObjectType } from '../../types/objectTypes'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { Button } from '../../components/ui/button'
 
@@ -26,6 +26,25 @@ export default function ObjectTypesPage() {
     setShowEditDialog(true);
   }
 
+  const handleUpdate = (): void => {
+    if (selectedType) {
+      setTypes(types.map(t => t.id === selectedType.id ? { ...t, name: editName } : t));
+    }
+    setShowEditDialog(false);
+  }
+
+  const handleDelete = (type: ObjectType): void => {
+    setSelectedType(type);
+    setShowDeleteDialog(true);
+  }
+
+  const handleConfirmDelete = () => {
+    if (selectedType) {
+      setTypes((prev) => prev.filter((t) => t.id !== selectedType.id));
+      setShowDeleteDialog(false);
+    }
+  }
+
   return (
     <div>
       <h1 className="text-2xl font-bold mb-4">Tipuri de obiecte</h1>
@@ -46,7 +65,7 @@ export default function ObjectTypesPage() {
               <td className="p-2 border-b">{t.description}</td>
               <td className="p-2 border-b space-x-2">
                 <button className="text-blue-600 hover:underline" onClick={() => handleEdit(t)}>Editează</button>
-                <button className="text-red-600 hover:underline">Șterge</button>
+                <button className="text-red-600 hover:underline" onClick={() => handleDelete(t)}>Șterge</button>
               </td>
             </tr>
           ))}
@@ -64,20 +83,26 @@ export default function ObjectTypesPage() {
             placeholder="Nume tip obiect"
           />
           <DialogFooter>
-            <Button variant="destructive" onClick={() => setShowEditDialog(false)}>Anulează</Button>
-            <Button className='ml-2 bg-gray-50' variant="default"
-              onClick={() => {
-                if (selectedType) {
-                  setTypes(types.map(t => t.id === selectedType.id ? { ...t, name: editName } : t));
-                }
-                setShowEditDialog(false);
-              }}
-            >
-              Salvează
-            </Button>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Anulează</Button>
+            <Button className='ml-2 bg-gray-50' variant="default" onClick={handleUpdate}>Salvează</Button>
           </DialogFooter>
         </DialogContent>
-        </Dialog>
+      </Dialog>
+
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmare ștergere</DialogTitle>
+          </DialogHeader>
+          <p>Ești sigur că vrei să ștergi "{selectedType?.name}"?</p>
+          <DialogFooter className="mt-4">
+            <DialogClose asChild>
+              <Button variant="outline">Nu</Button>
+            </DialogClose>
+            <Button variant="destructive" onClick={handleConfirmDelete}>Da, șterge</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
