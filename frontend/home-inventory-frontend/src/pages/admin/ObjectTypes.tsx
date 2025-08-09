@@ -1,9 +1,21 @@
-import { useState } from "react";
-import type { ObjectType } from '../../types/objectTypes'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose } from "../../components/ui/dialog";
+import { useEffect, useState } from "react";
+import type { ObjectType } from "../../types/objectTypes";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
-import { Button } from '../../components/ui/button'
-
+import { Button } from "../../components/ui/button";
+import {
+  deleteItemType,
+  getItemTypes,
+  updateItemType,
+} from "../../api/itemTypeService";
+import { Label } from '../../components/ui/label'
 
 const objectTypes: ObjectType[] = [
   { id: 1, name: "Individual", description: "Obiect simplu" },
@@ -17,33 +29,58 @@ export default function ObjectTypesPage() {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
 
+  useEffect(() => {
+    // Simulate fetching data from an API
+    loadTypes();
+  }, []);
 
+  const loadTypes = async () => {
+    try {
+      const res = await getItemTypes();
+      setTypes(res.data);
+    } catch (err) {
+      console.error("Eroare la preluarea datelor", err);
+    }
+  };
 
   const handleEdit = (type: ObjectType): void => {
     setSelectedType(type);
     setEditName(type.name);
+    setEditDescription(type.description);
     setShowEditDialog(true);
-  }
+  };
 
-  const handleUpdate = (): void => {
+  const handleUpdate = async (): Promise<void> => {
     if (selectedType) {
-      setTypes(types.map(t => t.id === selectedType.id ? { ...t, name: editName } : t));
+      console.log("Updating type:", selectedType.id, selectedType, editName, editDescription);
+      try {
+        await updateItemType(selectedType.id, {...selectedType, name: editName, description: editDescription});
+        loadTypes();
+      } catch (err) {
+        console.error("Eroare la actualizare", err);
+      }
     }
     setShowEditDialog(false);
-  }
+  };
 
   const handleDelete = (type: ObjectType): void => {
     setSelectedType(type);
     setShowDeleteDialog(true);
-  }
+  };
 
-  const handleConfirmDelete = () => {
+  const handleConfirmDelete = async () => {
     if (selectedType) {
-      setTypes((prev) => prev.filter((t) => t.id !== selectedType.id));
+      try {
+        await deleteItemType(selectedType.id);
+        loadTypes();
+      } catch (err) {
+        console.error("Eroare la ștergere", err);
+      }
       setShowDeleteDialog(false);
     }
-  }
+  };
 
   return (
     <div>
@@ -51,7 +88,6 @@ export default function ObjectTypesPage() {
       <table className="min-w-full bg-white border border-gray-200 shadow">
         <thead>
           <tr className="bg-gray-100 text-left">
-            <th className="p-2 border-b">#</th>
             <th className="p-2 border-b">Nume</th>
             <th className="p-2 border-b">Descriere</th>
             <th className="p-2 border-b">Acțiuni</th>
@@ -60,12 +96,21 @@ export default function ObjectTypesPage() {
         <tbody>
           {types.map((t) => (
             <tr key={t.id} className="hover:bg-gray-50 text-left">
-              <td className="p-2 border-b">{t.id}</td>
               <td className="p-2 border-b">{t.name}</td>
               <td className="p-2 border-b">{t.description}</td>
               <td className="p-2 border-b space-x-2">
-                <button className="text-blue-600 hover:underline" onClick={() => handleEdit(t)}>Editează</button>
-                <button className="text-red-600 hover:underline" onClick={() => handleDelete(t)}>Șterge</button>
+                <button
+                  className="text-blue-600 hover:underline"
+                  onClick={() => handleEdit(t)}
+                >
+                  Editează
+                </button>
+                <button
+                  className="text-red-600 hover:underline"
+                  onClick={() => handleDelete(t)}
+                >
+                  Șterge
+                </button>
               </td>
             </tr>
           ))}
@@ -77,14 +122,37 @@ export default function ObjectTypesPage() {
           <DialogHeader>
             <DialogTitle>Editare tip obiect</DialogTitle>
           </DialogHeader>
-          <Input
-            value={editName}
-            onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEditName(e.target.value)}
-            placeholder="Nume tip obiect"
-          />
+          <div>
+            <Label className="block mb-2" htmlFor="editName">Nume tip obiect</Label>
+            <Input
+              value={editName}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setEditName(e.target.value)
+              }
+              placeholder="Nume tip obiect"
+            />
+          </div>
+          <div>
+            <Label className="block mb-2" htmlFor="editDescription">Descriere tip obiect</Label>
+            <Input
+              value={editDescription}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                setEditDescription(e.target.value)
+              }
+              placeholder="Descriere tip obiect"
+            />
+          </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Anulează</Button>
-            <Button className='ml-2 bg-gray-50' variant="default" onClick={handleUpdate}>Salvează</Button>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Anulează
+            </Button>
+            <Button
+              className="ml-2 bg-gray-50"
+              variant="default"
+              onClick={handleUpdate}
+            >
+              Salvează
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -99,7 +167,9 @@ export default function ObjectTypesPage() {
             <DialogClose asChild>
               <Button variant="outline">Nu</Button>
             </DialogClose>
-            <Button variant="destructive" onClick={handleConfirmDelete}>Da, șterge</Button>
+            <Button variant="destructive" onClick={handleConfirmDelete}>
+              Da, șterge
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

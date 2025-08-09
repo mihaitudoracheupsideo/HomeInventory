@@ -12,9 +12,18 @@ builder.Services.AddControllers();
 // Adăugăm DbContext cu SQLite
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
-
+// Adăugăm CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173") // adaugă și IP-ul dacă îl folosești în loc de localhost
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
 var app = builder.Build();
-
+app.UseCors("AllowFrontend"); // Activează politica
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
