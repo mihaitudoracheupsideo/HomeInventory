@@ -1,5 +1,9 @@
 import { NavLink, Outlet } from "react-router-dom";
 
+const getNavStyle = ({ isActive }: { isActive: boolean }) => {
+  return `px-3 py-2 rounded ${isActive ? "bg-gray-700" : "hover:bg-gray-700"}`;
+}
+
 export default function MainLayout() {
   return (
     <div className="flex min-h-screen">
@@ -7,36 +11,10 @@ export default function MainLayout() {
       <aside className="w-64 bg-gray-800 text-white p-4 space-y-4">
         <h2 className="text-2xl font-bold mb-6">HomeInventory</h2>
         <nav className="flex flex-col space-y-2">
-          <NavLink
-            to="/"
-            className={({ isActive }) =>
-              `px-3 py-2 rounded ${
-                isActive ? "bg-gray-700" : "hover:bg-gray-700"
-              }`
-            }
-          >
-            Home
-          </NavLink>
-          <NavLink
-            to="/object-types"
-            className={({ isActive }) =>
-              `px-3 py-2 rounded ${
-                isActive ? "bg-gray-700" : "hover:bg-gray-700"
-              }`
-            }
-          >
-            Tipuri obiecte
-          </NavLink>
-          <NavLink
-            to="/about"
-            className={({ isActive }) =>
-              `px-3 py-2 rounded ${
-                isActive ? "bg-gray-700" : "hover:bg-gray-700"
-              }`
-            }
-          >
-            About
-          </NavLink>
+          <NavLink to="/" className={(isActive) => getNavStyle(isActive)}>Home</NavLink>
+          <NavLink to="/object-types" className={(isActive) => getNavStyle(isActive)}>Tipuri obiecte</NavLink>
+          <NavLink to="/objects" className={(isActive) => getNavStyle(isActive)}>Obiecte</NavLink>
+          <NavLink to="/about" className={(isActive) => getNavStyle(isActive)}>About</NavLink>
         </nav>
       </aside>
 

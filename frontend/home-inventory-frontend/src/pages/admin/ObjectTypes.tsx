@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { ObjectType } from "../../types/objectTypes";
+import type { IItemType } from "../../types/IItemType";
 import {
   Dialog,
   DialogContent,
@@ -17,15 +17,9 @@ import {
 } from "../../api/itemTypeService";
 import { Label } from '../../components/ui/label'
 
-const objectTypes: ObjectType[] = [
-  { id: 1, name: "Individual", description: "Obiect simplu" },
-  { id: 2, name: "Box", description: "Cutie care conține obiecte" },
-  { id: 3, name: "Room", description: "Locație fizică" },
-];
-
-export default function ObjectTypesPage() {
-  const [types, setTypes] = useState<ObjectType[]>(objectTypes);
-  const [selectedType, setSelectedType] = useState<ObjectType | null>(null);
+const ObjectTypesPage = () => {
+  const [types, setTypes] = useState([]);
+  const [selectedType, setSelectedType] = useState<IItemType | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [editName, setEditName] = useState("");
@@ -45,7 +39,7 @@ export default function ObjectTypesPage() {
     }
   };
 
-  const handleEdit = (type: ObjectType): void => {
+  const handleEdit = (type: IItemType): void => {
     setSelectedType(type);
     setEditName(type.name);
     setEditDescription(type.description);
@@ -65,7 +59,7 @@ export default function ObjectTypesPage() {
     setShowEditDialog(false);
   };
 
-  const handleDelete = (type: ObjectType): void => {
+  const handleDelete = (type: IItemType): void => {
     setSelectedType(type);
     setShowDeleteDialog(true);
   };
@@ -99,16 +93,10 @@ export default function ObjectTypesPage() {
               <td className="p-2 border-b">{t.name}</td>
               <td className="p-2 border-b">{t.description}</td>
               <td className="p-2 border-b space-x-2">
-                <button
-                  className="text-blue-600 hover:underline"
-                  onClick={() => handleEdit(t)}
-                >
+                <button className="text-blue-600 hover:underline" onClick={() => handleEdit(t)}>
                   Editează
                 </button>
-                <button
-                  className="text-red-600 hover:underline"
-                  onClick={() => handleDelete(t)}
-                >
+                <button className="text-red-600 hover:underline" onClick={() => handleDelete(t)}>
                   Șterge
                 </button>
               </td>
@@ -176,3 +164,5 @@ export default function ObjectTypesPage() {
     </div>
   );
 }
+
+export default ObjectTypesPage;
