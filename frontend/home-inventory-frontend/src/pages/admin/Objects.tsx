@@ -1,5 +1,10 @@
 import { useEffect, useState } from "react";
-import { deleteItem, getItems, updateItem } from "../../api/itemService";
+import {
+  createItem,
+  deleteItem,
+  getItems,
+  updateItem,
+} from "../../api/itemService";
 import type { IItem } from "../../types/IItem";
 import type { IItemType } from "../../types/IItemType";
 import {
@@ -14,6 +19,9 @@ import { Label } from "../../components/ui/label";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { getItemTypes } from "../../api/itemTypeService";
+import { Action } from "../../types/Enums";
+import { DataGrid } from "@mui/x-data-grid";
+import { Box } from "@mui/material";
 
 const ObjectsPage = () => {
   const [items, setItems] = useState([]);
@@ -22,9 +30,10 @@ const ObjectsPage = () => {
 
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
-  const [editItemTypeId, setEditItemTypeId] = useState("");
+
+  const [isAdding, setIsAdding] = useState(false);
+
+  
 
   useEffect(() => {
     // Simulate fetching data from an API
@@ -50,35 +59,27 @@ const ObjectsPage = () => {
     }
   };
 
-  const handleEdit = (object: IItem): void => {
+  const handleSaveEditPopup = (object: IItem, action: Action): void => {
     setSelectedItem(object);
-    setEditName(object.name);
-    setEditDescription(object.description);
-    setEditItemTypeId(object.itemTypeId);
     setShowEditDialog(true);
+    setIsAdding(action === Action.ADD);
   };
 
-  const handleDelete = (object: IItem): void => {
+  const handleDeletePopup = (object: IItem): void => {
     setSelectedItem(object);
     setShowDeleteDialog(true);
   };
 
-  const handleUpdate = async (
-    event: React.MouseEvent<HTMLButtonElement, MouseEvent>
-  ): Promise<void> => {
-    event.preventDefault();
+  const handleSaveEdit = async (): Promise<void> => {
     if (!selectedItem) return;
-
     try {
-      // Assuming you have an updateItem API function
-      // You may need to import it: import { updateItem } from '../../api/itemService';
-      const updated = {
-        ...selectedItem,
-        name: editName,
-        description: editDescription,
-        itemTypeId: editItemTypeId,
-      };
-      await updateItem(updated.id, updated);
+      if (isAdding) {
+        // Add new item
+        await createItem(selectedItem);
+      } else {
+        // update item
+        await updateItem(selectedItem.id, selectedItem);
+      }
       setShowEditDialog(false);
       setSelectedItem(null);
       await loadItems();
@@ -87,7 +88,7 @@ const ObjectsPage = () => {
     }
   };
 
-  const handleConfirmDelete = async (
+  const handleDelete = async (
     event: React.MouseEvent<HTMLButtonElement, MouseEvent>
   ): Promise<void> => {
     event.preventDefault();
@@ -106,8 +107,27 @@ const ObjectsPage = () => {
   };
 
   return (
-    <div className='w-full h-full overflow-auto'>
+    <div className="w-full h-full overflow-auto">
       <h1 className="text-2xl font-bold mb-4">Obiecte</h1>
+
+      {/* Buton Add */}
+      <button
+        className="mb-4 px-4 py-2 bg-green-600 text-black rounded"
+        onClick={() => {
+          handleSaveEditPopup(
+            {
+              id: "CA285BA4-925C-4817-9EDE-BB84E76A84CC",
+              name: "",
+              description: "",
+              itemTypeId: ""
+            },
+            Action.ADD
+          );
+        }}
+      >
+        ➕ Adaugă tip obiect
+      </button>
+
       <table className="min-w-full bg-white border border-gray-200 shadow">
         <thead>
           <tr className="bg-gray-100 text-left">
@@ -118,21 +138,21 @@ const ObjectsPage = () => {
           </tr>
         </thead>
         <tbody>
-          {items.map((object: IItem) => (
-            <tr key={object.id} className="hover:bg-gray-50 text-left">
-              <td className="p-2 border-b">{object.name}</td>
-              <td className="p-2 border-b">{object.description}</td>
-              <td className="p-2 border-b">{object.itemType.name}</td>
+          {items.map((item: IItem) => (
+            <tr key={item.id} className="hover:bg-gray-50 text-left">
+              <td className="p-2 border-b">{item.name}</td>
+              <td className="p-2 border-b">{item.description}</td>
+              <td className="p-2 border-b">{item.itemType?.name}</td>
               <td className="p-2 border-b space-x-2">
                 <button
                   className="text-blue-600 hover:underline"
-                  onClick={() => handleEdit(object)}
+                  onClick={() => handleSaveEditPopup(item, Action.EDIT)}
                 >
                   ✏️
                 </button>
                 <button
                   className="text-red-600 hover:underline"
-                  onClick={() => handleDelete(object)}
+                  onClick={() => handleDeletePopup(item)}
                 >
                   🗑️
                 </button>
@@ -152,9 +172,10 @@ const ObjectsPage = () => {
               Nume obiect
             </Label>
             <Input
-              value={editName}
+              value={selectedItem?.name}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setEditName(e.target.value)
+                selectedItem &&
+                setSelectedItem({ ...selectedItem, name: e.target.value })
               }
               placeholder="Nume obiect"
             />
@@ -164,9 +185,13 @@ const ObjectsPage = () => {
               Descriere obiect
             </Label>
             <Input
-              value={editDescription}
+              value={selectedItem?.description}
               onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setEditDescription(e.target.value)
+                selectedItem &&
+                setSelectedItem({
+                  ...selectedItem,
+                  description: e.target.value,
+                })
               }
               placeholder="Descriere obiect"
             />
@@ -177,8 +202,11 @@ const ObjectsPage = () => {
             </Label>
             <select
               className="border p-1 w-full"
-              value={editItemTypeId}
-              onChange={(e) => setEditItemTypeId(e.target.value)}
+              value={selectedItem?.itemTypeId}
+              onChange={(e) =>
+                selectedItem &&
+                setSelectedItem({ ...selectedItem, itemTypeId: e.target.value })
+              }
             >
               {itemTypes.map((type: IItemType) => (
                 <option key={type.id} value={type.id}>
@@ -192,9 +220,8 @@ const ObjectsPage = () => {
               Anulează
             </Button>
             <Button
-              className="ml-2 bg-gray-50"
-              variant="default"
-              onClick={handleUpdate}
+              variant="outline"
+              onClick={handleSaveEdit}
             >
               Salvează
             </Button>
@@ -212,7 +239,7 @@ const ObjectsPage = () => {
             <DialogClose asChild>
               <Button variant="outline">Nu</Button>
             </DialogClose>
-            <Button variant="destructive" onClick={handleConfirmDelete}>
+            <Button variant="outline" onClick={handleDelete}>
               Da, șterge
             </Button>
           </DialogFooter>

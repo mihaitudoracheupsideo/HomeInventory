@@ -5,7 +5,7 @@ export interface IItem {
   name: string;
   description: string;
   itemTypeId: string;
-  itemType: IItemType;
+  itemType?: IItemType;
   parentId?: string;
   parent?: IItem;
   children?: IItem[];

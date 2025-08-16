@@ -7,3 +7,10 @@ export const Action = {
 } as const;
 
 export type Action = typeof Action[keyof typeof Action];
+
+export const DataType = {
+    ITEM: 'ITEM',
+    ITEM_TYPE: 'ITEM_TYPE',
+}
+
+export type DataType = typeof DataType[keyof typeof DataType];

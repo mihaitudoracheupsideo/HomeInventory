@@ -19,12 +19,55 @@ import {
 import { Label } from '../../components/ui/label'
 import { Action } from '../../types/Enums'
 
+import { DataGrid, type GridRenderCellParams } from "@mui/x-data-grid";
+import { Box, Stack } from "@mui/material";
+
 const ObjectTypesPage = () => {
   const [types, setTypes] = useState<IItemType[]>([]);
   const [selectedType, setSelectedType] = useState<IItemType | null>(null);
+
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
   const [isAdding, setIsAdding] = useState(false);
+
+  const columns = [
+  {
+    field: 'name',
+    headerName: 'Nume',
+    width: 150,
+    editable: true,
+  },
+  {
+    field: 'description',
+    headerName: 'Descriere',
+    width: 150,
+    editable: true,
+  },{
+      field: "actions",
+      headerName: "Actions",
+      sortable: false,
+      width: 200,
+      renderCell: (params: GridRenderCellParams<IItemType>) => (
+        <Stack direction="row" spacing={1}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleSaveEditPopup(params.row, Action.EDIT)}
+          >
+            ✏️
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            color="error"
+            onClick={() => handleDeletePopup(params.row)}
+          >
+            🗑️
+          </Button>
+        </Stack>
+      ),
+    },]
 
   useEffect(() => {
     // Simulate fetching data from an API
@@ -163,12 +206,35 @@ const ObjectTypesPage = () => {
             <DialogClose asChild>
               <Button variant="outline">Nu</Button>
             </DialogClose>
-            <Button variant="destructive" onClick={handleDelete}>
+            <Button variant="outline" onClick={handleDelete}>
               Da, șterge
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <div>MUI DataGrid</div>
+      <Box sx={{ height: 400, width: "100%" }}>
+        <Box sx={{ mb: 2 }}>
+        <Button variant="outline" onClick={() => {
+          handleSaveEditPopup({ id: "CA285BA4-925C-4817-9EDE-BB84E76A84CC", name: "", description: "" }, Action.ADD);
+        }}>
+          Add New
+        </Button>
+      </Box>
+      <DataGrid
+        rows={types}
+        columns={columns}
+        pageSizeOptions={[5, 10, 20]}
+        initialState={{
+          pagination: {
+            paginationModel: { pageSize: 5, page: 0 },
+          },
+        }}
+        checkboxSelection // bife pentru selectie
+        disableRowSelectionOnClick
+      />
+    </Box>
     </div>
   );
 }
