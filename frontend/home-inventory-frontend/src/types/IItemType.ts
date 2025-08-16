@@ -1,5 +1,5 @@
 export interface IItemType {
-  id: string;
+  id: string | null;
   name: string;
   description: string;
 }

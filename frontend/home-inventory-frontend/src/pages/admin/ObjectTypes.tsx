@@ -11,19 +11,20 @@ import {
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import {
+  createItemType,
   deleteItemType,
   getItemTypes,
   updateItemType,
 } from "../../api/itemTypeService";
 import { Label } from '../../components/ui/label'
+import { Action } from '../../types/Enums'
 
 const ObjectTypesPage = () => {
-  const [types, setTypes] = useState([]);
+  const [types, setTypes] = useState<IItemType[]>([]);
   const [selectedType, setSelectedType] = useState<IItemType | null>(null);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-  const [editName, setEditName] = useState("");
-  const [editDescription, setEditDescription] = useState("");
+  const [isAdding, setIsAdding] = useState(false);
 
   useEffect(() => {
     // Simulate fetching data from an API
@@ -39,18 +40,22 @@ const ObjectTypesPage = () => {
     }
   };
 
-  const handleEdit = (type: IItemType): void => {
+  const handleSaveEditPopup = (type: IItemType, action: Action): void => {
     setSelectedType(type);
-    setEditName(type.name);
-    setEditDescription(type.description);
     setShowEditDialog(true);
+    setIsAdding(action === Action.ADD);
   };
 
-  const handleUpdate = async (): Promise<void> => {
+  const handleSaveEdit= async (): Promise<void> => {
     if (selectedType) {
-      console.log("Updating type:", selectedType.id, selectedType, editName, editDescription);
       try {
-        await updateItemType(selectedType.id, {...selectedType, name: editName, description: editDescription});
+        if (isAdding) {
+          // Add new type
+          await createItemType(selectedType);
+        } else {
+          // Update existing type
+          await updateItemType(selectedType.id, selectedType);
+        }
         loadTypes();
       } catch (err) {
         console.error("Eroare la actualizare", err);
@@ -59,12 +64,12 @@ const ObjectTypesPage = () => {
     setShowEditDialog(false);
   };
 
-  const handleDelete = (type: IItemType): void => {
+  const handleDeletePopup = (type: IItemType): void => {
     setSelectedType(type);
     setShowDeleteDialog(true);
   };
 
-  const handleConfirmDelete = async () => {
+  const handleDelete = async () => {
     if (selectedType) {
       try {
         await deleteItemType(selectedType.id);
@@ -79,7 +84,18 @@ const ObjectTypesPage = () => {
   return (
     <div>
       <h1 className="text-2xl font-bold mb-4">Tipuri de obiecte</h1>
-      <table className="min-w-full bg-white border border-gray-200 shadow">
+      
+      {/* Buton Add */}
+      <button
+        className="mb-4 px-4 py-2 bg-green-600 text-black rounded"
+        onClick={() => {
+          handleSaveEditPopup({ id: "CA285BA4-925C-4817-9EDE-BB84E76A84CC", name: "", description: "" }, Action.ADD);
+        }}
+      >
+        ➕ Adaugă tip obiect
+      </button>
+
+      <table className="w-full bg-white border border-gray-200 shadow rounded-lg">
         <thead>
           <tr className="bg-gray-100 text-left">
             <th className="p-2 border-b">Nume</th>
@@ -88,16 +104,16 @@ const ObjectTypesPage = () => {
           </tr>
         </thead>
         <tbody>
-          {types.map((t) => (
-            <tr key={t.id} className="hover:bg-gray-50 text-left">
-              <td className="p-2 border-b">{t.name}</td>
-              <td className="p-2 border-b">{t.description}</td>
+          {types.map((type) => (
+            <tr key={type.id} className="hover:bg-gray-50 text-left">
+              <td className="p-2 border-b">{type.name}</td>
+              <td className="p-2 border-b">{type.description}</td>
               <td className="p-2 border-b space-x-2">
-                <button className="text-blue-600 hover:underline" onClick={() => handleEdit(t)}>
-                  Editează
+                <button className="text-blue-600 hover:underline" onClick={() => handleSaveEditPopup(type, Action.EDIT)}>
+                  ✏️
                 </button>
-                <button className="text-red-600 hover:underline" onClick={() => handleDelete(t)}>
-                  Șterge
+                <button className="text-red-600 hover:underline" onClick={() => handleDeletePopup(type)}>
+                  🗑️
                 </button>
               </td>
             </tr>
@@ -108,25 +124,21 @@ const ObjectTypesPage = () => {
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Editare tip obiect</DialogTitle>
+            <DialogTitle>{isAdding ? "Adaugare tip obiect" : "Editare tip obiect"}</DialogTitle>
           </DialogHeader>
           <div>
             <Label className="block mb-2" htmlFor="editName">Nume tip obiect</Label>
             <Input
-              value={editName}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setEditName(e.target.value)
-              }
+              value={selectedType?.name}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => selectedType && setSelectedType({ ...selectedType, name: e.target.value })}
               placeholder="Nume tip obiect"
             />
           </div>
           <div>
             <Label className="block mb-2" htmlFor="editDescription">Descriere tip obiect</Label>
             <Input
-              value={editDescription}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
-                setEditDescription(e.target.value)
-              }
+              value={selectedType?.description}
+              onChange={(e: React.ChangeEvent<HTMLInputElement>) => selectedType && setSelectedType({ ...selectedType, description: e.target.value})}
               placeholder="Descriere tip obiect"
             />
           </div>
@@ -134,11 +146,7 @@ const ObjectTypesPage = () => {
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
               Anulează
             </Button>
-            <Button
-              className="ml-2 bg-gray-50"
-              variant="default"
-              onClick={handleUpdate}
-            >
+            <Button variant="outline" onClick={handleSaveEdit}>
               Salvează
             </Button>
           </DialogFooter>
@@ -155,7 +163,7 @@ const ObjectTypesPage = () => {
             <DialogClose asChild>
               <Button variant="outline">Nu</Button>
             </DialogClose>
-            <Button variant="destructive" onClick={handleConfirmDelete}>
+            <Button variant="destructive" onClick={handleDelete}>
               Da, șterge
             </Button>
           </DialogFooter>
