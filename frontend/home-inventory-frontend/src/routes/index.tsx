@@ -1,9 +1,11 @@
-import Home from "../pages/Home";
-import About from "../pages/About";
+import { lazy } from "react";
 import type { RouteObject } from "react-router-dom";
 import MainLayout from "../layouts/MainLayout";
-import ObjectTypesPage from '../pages/admin/ObjectTypes'
-import ObjectsPage from '../pages/admin/Objects'
+
+const Home = lazy(() => import("../pages/Home"));
+const About = lazy(() => import("../pages/About"));
+const ObjectTypesPage = lazy(() => import('../pages/admin/ObjectTypes'));
+const ObjectsPage = lazy(() => import('../pages/admin/Objects'));
 
 export const routes: RouteObject[] = [
   {

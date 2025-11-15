@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { ChangeEvent } from "react";
 import type { IItemType } from "../../types/IItemType";
 import {
   Dialog,
@@ -16,10 +17,11 @@ import {
   getItemTypes,
   updateItemType,
 } from "../../api/itemTypeService";
-import { Label } from '../../components/ui/label'
-import { Action } from '../../types/Enums'
+import { Label } from "../../components/ui/label";
+import { Action } from "../../types/Enums";
+import type { Action as ActionType } from "../../types/Enums";
 
-import { DataGrid, type GridRenderCellParams } from "@mui/x-data-grid";
+import { DataGrid, type GridColDef, type GridRenderCellParams } from "@mui/x-data-grid";
 import { Box, Stack } from "@mui/material";
 
 const ObjectTypesPage = () => {
@@ -31,19 +33,20 @@ const ObjectTypesPage = () => {
 
   const [isAdding, setIsAdding] = useState(false);
 
-  const columns = [
-  {
-    field: 'name',
-    headerName: 'Nume',
-    width: 150,
-    editable: true,
-  },
-  {
-    field: 'description',
-    headerName: 'Descriere',
-    width: 150,
-    editable: true,
-  },{
+  const columns: GridColDef<IItemType>[] = [
+    {
+      field: "name",
+      headerName: "Nume",
+      width: 150,
+      editable: true,
+    },
+    {
+      field: "description",
+      headerName: "Descriere",
+      width: 150,
+      editable: true,
+    },
+    {
       field: "actions",
       headerName: "Actions",
       sortable: false,
@@ -67,7 +70,8 @@ const ObjectTypesPage = () => {
           </Button>
         </Stack>
       ),
-    },]
+    },
+  ];
 
   useEffect(() => {
     // Simulate fetching data from an API
@@ -77,13 +81,23 @@ const ObjectTypesPage = () => {
   const loadTypes = async () => {
     try {
       const res = await getItemTypes();
-      setTypes(res.data);
+      const payload = res.data;
+      const pagedItems = Array.isArray(payload?.data) ? payload.data : payload;
+
+      if (Array.isArray(pagedItems)) {
+        setTypes(pagedItems);
+      } else {
+        console.error("Unexpected response shape when loading item types", payload);
+        setTypes([]);
+      }
     } catch (err) {
       console.error("Eroare la preluarea datelor", err);
     }
   };
 
-  const handleSaveEditPopup = (type: IItemType, action: Action): void => {
+  const createEmptyType = (): IItemType => ({ id: "", name: "", description: "" });
+
+  const handleSaveEditPopup = (type: IItemType, action: ActionType): void => {
     setSelectedType(type);
     setShowEditDialog(true);
     setIsAdding(action === Action.ADD);
@@ -132,7 +146,7 @@ const ObjectTypesPage = () => {
       <button
         className="mb-4 px-4 py-2 bg-green-600 text-black rounded"
         onClick={() => {
-          handleSaveEditPopup({ id: "CA285BA4-925C-4817-9EDE-BB84E76A84CC", name: "", description: "" }, Action.ADD);
+          handleSaveEditPopup(createEmptyType(), Action.ADD);
         }}
       >
         ➕ Adaugă tip obiect
@@ -173,7 +187,7 @@ const ObjectTypesPage = () => {
             <Label className="block mb-2" htmlFor="editName">Nume tip obiect</Label>
             <Input
               value={selectedType?.name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => selectedType && setSelectedType({ ...selectedType, name: e.target.value })}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => selectedType && setSelectedType({ ...selectedType, name: e.target.value })}
               placeholder="Nume tip obiect"
             />
           </div>
@@ -181,7 +195,7 @@ const ObjectTypesPage = () => {
             <Label className="block mb-2" htmlFor="editDescription">Descriere tip obiect</Label>
             <Input
               value={selectedType?.description}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) => selectedType && setSelectedType({ ...selectedType, description: e.target.value})}
+              onChange={(e: ChangeEvent<HTMLInputElement>) => selectedType && setSelectedType({ ...selectedType, description: e.target.value})}
               placeholder="Descriere tip obiect"
             />
           </div>
@@ -217,7 +231,7 @@ const ObjectTypesPage = () => {
       <Box sx={{ height: 400, width: "100%" }}>
         <Box sx={{ mb: 2 }}>
         <Button variant="outline" onClick={() => {
-          handleSaveEditPopup({ id: "CA285BA4-925C-4817-9EDE-BB84E76A84CC", name: "", description: "" }, Action.ADD);
+          handleSaveEditPopup(createEmptyType(), Action.ADD);
         }}>
           Add New
         </Button>

@@ -21,5 +21,12 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<ItemType>()
             .HasKey(ot => ot.Id);
+
+        // Indexes for performance
+        modelBuilder.Entity<Item>()
+            .HasIndex(i => i.Name);
+
+        modelBuilder.Entity<ItemType>()
+            .HasIndex(it => it.Name);
     }
 }

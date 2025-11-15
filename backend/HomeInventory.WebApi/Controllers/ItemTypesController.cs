@@ -1,7 +1,7 @@
-using HomeInventory.Infrastructure;
+using HomeInventory.Repository;
 using HomeInventory.Domain;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace HomeInventory.WebApi.Controllers
 {
@@ -9,26 +9,34 @@ namespace HomeInventory.WebApi.Controllers
     [Route("api/[controller]")]
     public class ItemTypesController : ControllerBase
     {
-        private readonly AppDbContext _context;
+        private readonly IItemTypeRepository _itemTypeRepository;
+        private readonly IMemoryCache _cache;
 
-        public ItemTypesController(AppDbContext context)
+        public ItemTypesController(IItemTypeRepository itemTypeRepository, IMemoryCache cache)
         {
-            _context = context;
+            _itemTypeRepository = itemTypeRepository;
+            _cache = cache;
         }
 
         // GET: api/ItemTypes
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(int page = 1, int pageSize = 10)
         {
-            var itemTypes = await _context.ItemType.ToListAsync();
-            return Ok(itemTypes);
+            const string cacheKey = "itemtypes_list";
+            if (!_cache.TryGetValue(cacheKey, out IEnumerable<ItemType>? itemTypes))
+            {
+                itemTypes = await _itemTypeRepository.GetAllAsync();
+                _cache.Set(cacheKey, itemTypes, TimeSpan.FromMinutes(5));
+            }
+            var paginated = itemTypes!.Skip((page - 1) * pageSize).Take(pageSize);
+            return Ok(new PaginatedResponse<ItemType> { Data = paginated, TotalCount = itemTypes!.Count() });
         }
 
         // GET: api/ItemTypes/{id}
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
         {
-            var itemType = await _context.ItemType.FindAsync(id);
+            var itemType = await _itemTypeRepository.GetByIdAsync(id);
             if (itemType == null)
                 return NotFound();
             return Ok(itemType);
@@ -39,8 +47,8 @@ namespace HomeInventory.WebApi.Controllers
         public async Task<IActionResult> Create([FromBody] ItemType itemType)
         {
             itemType.Id = Guid.NewGuid();
-            _context.ItemType.Add(itemType);
-            await _context.SaveChangesAsync();
+            await _itemTypeRepository.AddAsync(itemType);
+            _cache.Remove("itemtypes_list");
             return CreatedAtAction(nameof(GetById), new { id = itemType.Id }, itemType);
         }
 
@@ -51,19 +59,8 @@ namespace HomeInventory.WebApi.Controllers
             if (id != itemType.Id)
                 return BadRequest();
 
-            _context.Entry(itemType).State = EntityState.Modified;
-
-            try
-            {
-                await _context.SaveChangesAsync();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!await _context.ItemType.AnyAsync(e => e.Id == id))
-                    return NotFound();
-                throw;
-            }
-
+            await _itemTypeRepository.UpdateAsync(itemType);
+            _cache.Remove("itemtypes_list");
             return NoContent();
         }
 
@@ -71,13 +68,12 @@ namespace HomeInventory.WebApi.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(Guid id)
         {
-            var itemType = await _context.ItemType.FindAsync(id);
+            var itemType = await _itemTypeRepository.GetByIdAsync(id);
             if (itemType == null)
                 return NotFound();
 
-            _context.ItemType.Remove(itemType);
-            await _context.SaveChangesAsync();
-
+            await _itemTypeRepository.DeleteAsync(itemType);
+            _cache.Remove("itemtypes_list");
             return NoContent();
         }
     }

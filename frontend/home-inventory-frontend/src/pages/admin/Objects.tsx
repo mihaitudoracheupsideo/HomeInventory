@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import type { ChangeEvent, MouseEvent } from "react";
 import {
   createItem,
   deleteItem,
@@ -20,47 +21,143 @@ import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import { getItemTypes } from "../../api/itemTypeService";
 import { Action } from "../../types/Enums";
-import { DataGrid } from "@mui/x-data-grid";
-import { Box } from "@mui/material";
+import type { Action as ActionType } from "../../types/Enums";
+import {
+  DataGrid,
+  type GridColDef,
+  type GridRenderCellParams,
+} from "@mui/x-data-grid";
+import { Box, Stack } from "@mui/material";
+
+const extractCollection = <T,>(payload: unknown): T[] => {
+  if (Array.isArray(payload)) {
+    return payload as T[];
+  }
+
+  if (payload && typeof payload === "object") {
+    const dataProp = (payload as Record<string, unknown>).data ??
+      (payload as Record<string, unknown>).Data;
+    if (Array.isArray(dataProp)) {
+      return dataProp as T[];
+    }
+  }
+
+  return [];
+};
 
 const ObjectsPage = () => {
-  const [items, setItems] = useState([]);
+  const [items, setItems] = useState<IItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<IItem | null>(null);
-  const [itemTypes, setItemTypes] = useState([]);
+  const [itemTypes, setItemTypes] = useState<IItemType[]>([]);
 
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const [isAdding, setIsAdding] = useState(false);
 
-  
+  const columns: GridColDef<IItem, string>[] = [
+    {
+      field: "name",
+      headerName: "Nume",
+      width: 150,
+      editable: true,
+    },
+    {
+      field: "description",
+      headerName: "Descriere",
+      width: 150,
+      editable: true,
+    },
+    {
+      field: "itemTypeName",
+      headerName: "Tip",
+      width: 150,
+      valueGetter: (_value, row) => row.itemType?.name ?? "",
+    },
+    {
+      field: "actions",
+      headerName: "Actions",
+      sortable: false,
+      width: 200,
+      renderCell: (params: GridRenderCellParams<IItem>) => (
+        <Stack direction="row" spacing={1}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleSaveEditPopup(params.row, Action.EDIT)}
+          >
+            ✏️
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            color="error"
+            onClick={() => handleDeletePopup(params.row)}
+          >
+            🗑️
+          </Button>
+        </Stack>
+      ),
+    },
+  ];
+
+  const createEmptyItem = (): IItem => ({
+    id: "",
+    name: "",
+    description: "",
+    itemTypeId: itemTypes[0]?.id ?? "",
+  });
+
+  const loadItems = useCallback(async () => {
+    try {
+      const res = await getItems();
+      const payload = extractCollection<IItem>(res.data);
+      const isRecognizedShape =
+        Array.isArray(res.data) ||
+        (res.data &&
+          typeof res.data === "object" &&
+          ("data" in (res.data as object) || "Data" in (res.data as object)));
+
+      if (isRecognizedShape) {
+        setItems(payload);
+      } else {
+        console.error("Unexpected response shape when loading items", res.data);
+        setItems([]);
+      }
+    } catch (err) {
+      console.error("Error fetching objects", err);
+    }
+  }, []);
+
+  const loadItemTypes = useCallback(async () => {
+    try {
+      const res = await getItemTypes();
+      const payload = extractCollection<IItemType>(res.data);
+      const isRecognizedShape =
+        Array.isArray(res.data) ||
+        (res.data &&
+          typeof res.data === "object" &&
+          ("data" in (res.data as object) || "Data" in (res.data as object)));
+
+      if (isRecognizedShape) {
+        setItemTypes(payload);
+      } else {
+        console.error("Unexpected response shape when loading item types", res.data);
+        setItemTypes([]);
+      }
+    } catch (err) {
+      console.error("Error fetching objects", err);
+    }
+  }, []);
 
   useEffect(() => {
     // Simulate fetching data from an API
-    loadItems();
-    loadItemTypes();
-  }, []);
+    void loadItems();
+    void loadItemTypes();
+  }, [loadItems, loadItemTypes]);
 
-  const loadItems = async () => {
-    try {
-      const res = await getItems();
-      setItems(res.data);
-    } catch (err) {
-      console.error("Error fetching objects", err);
-    }
-  };
-
-  const loadItemTypes = async () => {
-    try {
-      const res = await getItemTypes();
-      setItemTypes(res.data);
-    } catch (err) {
-      console.error("Error fetching objects", err);
-    }
-  };
-
-  const handleSaveEditPopup = (object: IItem, action: Action): void => {
-    setSelectedItem(object);
+  const handleSaveEditPopup = (object: IItem, action: ActionType): void => {
+    setSelectedItem(action === Action.ADD ? createEmptyItem() : object);
     setShowEditDialog(true);
     setIsAdding(action === Action.ADD);
   };
@@ -89,7 +186,7 @@ const ObjectsPage = () => {
   };
 
   const handleDelete = async (
-    event: React.MouseEvent<HTMLButtonElement, MouseEvent>
+    event: MouseEvent<HTMLButtonElement>
   ): Promise<void> => {
     event.preventDefault();
     if (!selectedItem) return;
@@ -173,7 +270,7 @@ const ObjectsPage = () => {
             </Label>
             <Input
               value={selectedItem?.name}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 selectedItem &&
                 setSelectedItem({ ...selectedItem, name: e.target.value })
               }
@@ -186,7 +283,7 @@ const ObjectsPage = () => {
             </Label>
             <Input
               value={selectedItem?.description}
-              onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
                 selectedItem &&
                 setSelectedItem({
                   ...selectedItem,
@@ -202,12 +299,15 @@ const ObjectsPage = () => {
             </Label>
             <select
               className="border p-1 w-full"
-              value={selectedItem?.itemTypeId}
+              value={selectedItem?.itemTypeId ?? ""}
               onChange={(e) =>
                 selectedItem &&
                 setSelectedItem({ ...selectedItem, itemTypeId: e.target.value })
               }
             >
+              <option value="" disabled>
+                Selectează un tip
+              </option>
               {itemTypes.map((type: IItemType) => (
                 <option key={type.id} value={type.id}>
                   {type.name}
@@ -245,6 +345,32 @@ const ObjectsPage = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <div>MUI DataGrid</div>
+      <Box sx={{ height: 400, width: "100%" }}>
+        <Box sx={{ mb: 2 }}>
+        <Button
+          variant="outline"
+          onClick={() => {
+            handleSaveEditPopup(createEmptyItem(), Action.ADD);
+          }}
+        >
+          Add New
+        </Button>
+      </Box>
+      <DataGrid
+        rows={items}
+        columns={columns}
+        pageSizeOptions={[5, 10, 20]}
+        initialState={{
+          pagination: {
+            paginationModel: { pageSize: 5, page: 0 },
+          },
+        }}
+        checkboxSelection // bife pentru selectie
+        disableRowSelectionOnClick
+      />
+    </Box>
     </div>
   );
 };

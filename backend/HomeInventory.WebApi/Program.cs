@@ -1,4 +1,5 @@
 using HomeInventory.Infrastructure;
+using HomeInventory.Repository;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,12 +13,20 @@ builder.Services.AddControllers();
 // Adăugăm DbContext cu SQLite
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Register repositories
+builder.Services.AddScoped<IItemRepository, ItemRepository>();
+builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
+
+// Add caching
+builder.Services.AddMemoryCache();
+
 // Adăugăm CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("http://localhost:5173") // adaugă și IP-ul dacă îl folosești în loc de localhost
+        policy.SetIsOriginAllowed(origin => new Uri(origin).Host == "localhost")
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
