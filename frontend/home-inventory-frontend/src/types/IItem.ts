@@ -9,4 +9,7 @@ export interface IItem {
   parentId?: string;
   parent?: IItem;
   children?: IItem[];
+  uniqueCode?: string;
+  tags: string[];
+  imagePath?: string;
 }

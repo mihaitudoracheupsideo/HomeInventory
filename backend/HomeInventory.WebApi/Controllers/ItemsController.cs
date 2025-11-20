@@ -39,13 +39,64 @@ public class ItemsController : ControllerBase
         if (item == null)
             return NotFound();
         return Ok(item);
+    }
+
+    [HttpGet("code/{uniqueCode}")]
+    public async Task<IActionResult> GetByUniqueCode(string uniqueCode)
+    {
+        var item = await _itemRepository.GetItemByUniqueCodeAsync(uniqueCode);
+        if (item == null)
+            return NotFound();
+        return Ok(item);
     }  
 
-    // POST: api/Items
-    [HttpPost]
-    public async Task<IActionResult> Create([FromBody] Item item)
+    // POST: api/Items/create
+    [HttpPost("create")]
+    public async Task<IActionResult> Create([FromBody] CreateItemDto createItemDto)
     {
-        item.Id = Guid.NewGuid();
+        Console.WriteLine("Create method called");
+        
+        if (createItemDto == null)
+        {
+            Console.WriteLine("Validation failed: CreateItemDto is null");
+            return BadRequest("Item data is required");
+        }
+        
+        Console.WriteLine($"Raw received data - Name: '{createItemDto.Name}', ItemTypeId: '{createItemDto.ItemTypeId}'");
+        
+        // Validate required fields
+        if (string.IsNullOrWhiteSpace(createItemDto.Name))
+        {
+            Console.WriteLine("Validation failed: Name is empty");
+            return BadRequest("Name is required");
+        }
+        
+        // Check model state
+        if (!ModelState.IsValid)
+        {
+            Console.WriteLine("Model state is invalid");
+            foreach (var error in ModelState.Values.SelectMany(v => v.Errors))
+            {
+                Console.WriteLine($"Model error: {error.ErrorMessage}");
+            }
+            return BadRequest(ModelState);
+        }
+        
+        var item = new Item
+        {
+            Id = Guid.NewGuid(),
+            Name = createItemDto.Name,
+            Description = createItemDto.Description,
+            ItemTypeId = createItemDto.ItemTypeId,
+            Tags = createItemDto.Tags ?? new List<string>(),
+            ImagePath = createItemDto.ImagePath
+        };
+        
+        // Generate unique code
+        item.UniqueCode = GenerateUniqueCode();
+        
+        Console.WriteLine($"Generated UniqueCode: {item.UniqueCode}");
+        
         await _itemRepository.AddAsync(item);
         _cache.Remove("items_list");
         return CreatedAtAction(nameof(GetById), new { id = item.Id }, item);
@@ -53,12 +104,20 @@ public class ItemsController : ControllerBase
 
     // PUT: api/Items/{id}
     [HttpPut("{id}")]
-    public async Task<IActionResult> Update(Guid id, [FromBody] Item item)
+    public async Task<IActionResult> Update(Guid id, [FromBody] UpdateItemDto updateItemDto)
     {
-        if (id != item.Id)
-            return BadRequest();
+        var existingItem = await _itemRepository.GetByIdAsync(id);
+        if (existingItem == null)
+            return NotFound();
 
-        await _itemRepository.UpdateAsync(item);
+        // Update only the fields that can be changed
+        existingItem.Name = updateItemDto.Name;
+        existingItem.Description = updateItemDto.Description;
+        existingItem.ItemTypeId = updateItemDto.ItemTypeId;
+        existingItem.Tags = updateItemDto.Tags ?? new List<string>();
+        existingItem.ImagePath = updateItemDto.ImagePath;
+
+        await _itemRepository.UpdateAsync(existingItem);
         _cache.Remove("items_list");
         return NoContent();
     }
@@ -74,5 +133,19 @@ public class ItemsController : ControllerBase
         await _itemRepository.DeleteAsync(item);
         _cache.Remove("items_list");
         return NoContent();
+    }
+
+    private string GenerateUniqueCode()
+    {
+        const string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        var random = new Random();
+        var result = new char[8];
+        
+        for (int i = 0; i < 8; i++)
+        {
+            result[i] = chars[random.Next(chars.Length)];
+        }
+        
+        return new string(result);
     }
 }

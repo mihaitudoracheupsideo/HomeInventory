@@ -44,9 +44,15 @@ namespace HomeInventory.WebApi.Controllers
 
         // POST: api/ItemTypes
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] ItemType itemType)
+        public async Task<IActionResult> Create([FromBody] CreateItemTypeDto createItemTypeDto)
         {
-            itemType.Id = Guid.NewGuid();
+            var itemType = new ItemType
+            {
+                Id = Guid.NewGuid(),
+                Name = createItemTypeDto.Name,
+                Description = createItemTypeDto.Description
+            };
+            
             await _itemTypeRepository.AddAsync(itemType);
             _cache.Remove("itemtypes_list");
             return CreatedAtAction(nameof(GetById), new { id = itemType.Id }, itemType);

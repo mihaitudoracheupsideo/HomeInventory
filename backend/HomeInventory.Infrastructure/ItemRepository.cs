@@ -19,4 +19,9 @@ public class ItemRepository : Repository<Item>, IItemRepository
     {
         return await _context.Item.Include(i => i.ItemType).FirstOrDefaultAsync(i => i.Id == id);
     }
+
+    public async Task<Item?> GetItemByUniqueCodeAsync(string uniqueCode)
+    {
+        return await _context.Item.Include(i => i.ItemType).FirstOrDefaultAsync(i => i.UniqueCode == uniqueCode);
+    }
 }

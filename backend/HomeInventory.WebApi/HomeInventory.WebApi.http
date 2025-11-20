@@ -4,3 +4,19 @@ GET {{HomeInventory.WebApi_HostAddress}}/weatherforecast/
 Accept: application/json
 
 ###
+
+GET {{HomeInventory.WebApi_HostAddress}}/api/items
+Accept: application/json
+
+###
+
+POST {{HomeInventory.WebApi_HostAddress}}/api/items/create
+Content-Type: application/json
+
+{
+    "name": "Test Item",
+    "description": "A test item for QR code functionality",
+    "itemTypeId": "550e8400-e29b-41d4-a716-446655440000"
+}
+
+###

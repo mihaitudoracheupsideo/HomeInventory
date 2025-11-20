@@ -6,6 +6,7 @@ const Home = lazy(() => import("../pages/Home"));
 const About = lazy(() => import("../pages/About"));
 const ObjectTypesPage = lazy(() => import('../pages/admin/ObjectTypes'));
 const ObjectsPage = lazy(() => import('../pages/admin/Objects'));
+const ItemDetailPage = lazy(() => import('../pages/admin/ItemDetail'));
 
 export const routes: RouteObject[] = [
   {
@@ -16,6 +17,8 @@ export const routes: RouteObject[] = [
       { path: "/about", element: <About /> },
       { path: "/object-types", element: <ObjectTypesPage /> },
       { path: "/objects", element: <ObjectsPage /> },
+      { path: "/objects/:id", element: <ItemDetailPage /> },
+      { path: "/item/:uniqueCode", element: <ItemDetailPage /> },
     ],
   },
 ];

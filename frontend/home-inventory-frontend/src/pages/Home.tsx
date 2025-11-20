@@ -1,5 +1,7 @@
-const Home = () => {
-  return <h1 className="text-2xl font-semibold">Welcome to Home Inventory</h1>
-}
+import Dashboard from '../components/Dashboard';
 
-export default Home
+const Home = () => {
+  return <Dashboard />;
+};
+
+export default Home;

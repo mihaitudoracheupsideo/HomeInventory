@@ -3,6 +3,7 @@ using System;
 using HomeInventory.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace HomeInventory.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251119131221_AddUniqueCodeToItem")]
+    partial class AddUniqueCodeToItem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.8");
@@ -27,10 +30,6 @@ namespace HomeInventory.Infrastructure.Migrations
                         .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
-                    b.Property<string>("ImagePath")
-                        .HasMaxLength(500)
-                        .HasColumnType("TEXT");
-
                     b.Property<Guid>("ItemTypeId")
                         .HasColumnType("TEXT");
 
@@ -39,10 +38,8 @@ namespace HomeInventory.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
-                    b.PrimitiveCollection<string>("Tags")
-                        .HasColumnType("TEXT");
-
                     b.Property<string>("UniqueCode")
+                        .IsRequired()
                         .HasMaxLength(8)
                         .HasColumnType("TEXT");
 

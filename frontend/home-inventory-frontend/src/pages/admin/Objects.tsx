@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ChangeEvent, MouseEvent } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   createItem,
   deleteItem,
   getItems,
   updateItem,
 } from "../../api/itemService";
+import { uploadImage } from "../../api/imageService";
 import type { IItem } from "../../types/IItem";
 import type { IItemType } from "../../types/IItemType";
 import {
@@ -46,14 +48,20 @@ const extractCollection = <T,>(payload: unknown): T[] => {
 };
 
 const ObjectsPage = () => {
+  const navigate = useNavigate();
   const [items, setItems] = useState<IItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<IItem | null>(null);
   const [itemTypes, setItemTypes] = useState<IItemType[]>([]);
 
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showImageDialog, setShowImageDialog] = useState(false);
+  const [selectedImageItem, setSelectedImageItem] = useState<IItem | null>(null);
 
   const [isAdding, setIsAdding] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadSize, setUploadSize] = useState<'original' | 'resized'>('original');
 
   const columns: GridColDef<IItem, string>[] = [
     {
@@ -75,12 +83,36 @@ const ObjectsPage = () => {
       valueGetter: (_value, row) => row.itemType?.name ?? "",
     },
     {
+      field: "image",
+      headerName: "Imagine",
+      sortable: false,
+      width: 100,
+      renderCell: (params: GridRenderCellParams<IItem>) => (
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => handleViewImage(params.row)}
+          disabled={!params.row.imagePath}
+          title={params.row.imagePath ? "Vezi imaginea" : "Nicio imagine"}
+        >
+          🖼️
+        </Button>
+      ),
+    },
+    {
       field: "actions",
       headerName: "Actions",
       sortable: false,
       width: 200,
       renderCell: (params: GridRenderCellParams<IItem>) => (
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => handleViewDetail(params.row)}
+          >
+            👁️
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -105,7 +137,9 @@ const ObjectsPage = () => {
     id: "",
     name: "",
     description: "",
-    itemTypeId: itemTypes[0]?.id ?? "",
+    itemTypeId: itemTypes.length > 0 ? itemTypes[0].id : "",
+    tags: [],
+    imagePath: "",
   });
 
   const loadItems = useCallback(async () => {
@@ -158,8 +192,19 @@ const ObjectsPage = () => {
 
   const handleSaveEditPopup = (object: IItem, action: ActionType): void => {
     setSelectedItem(action === Action.ADD ? createEmptyItem() : object);
+    setSelectedFile(null);
+    setUploadSize('original');
     setShowEditDialog(true);
     setIsAdding(action === Action.ADD);
+  };
+
+  const handleViewDetail = (item: IItem): void => {
+    navigate(`/objects/${item.id}`);
+  };
+
+  const handleViewImage = (item: IItem): void => {
+    setSelectedImageItem(item);
+    setShowImageDialog(true);
   };
 
   const handleDeletePopup = (object: IItem): void => {
@@ -169,19 +214,70 @@ const ObjectsPage = () => {
 
   const handleSaveEdit = async (): Promise<void> => {
     if (!selectedItem) return;
+
+    // Validate required fields
+    if (!selectedItem.name?.trim()) {
+      alert("Name is required");
+      return;
+    }
+    if (!selectedItem.itemTypeId || selectedItem.itemTypeId === "") {
+      alert("Item type is required");
+      return;
+    }
+
     try {
+      // Upload image if a file is selected
+      if (selectedFile && selectedItem.uniqueCode) {
+        setIsUploading(true);
+        try {
+          const uploadParams: { maxWidth?: number; maxHeight?: number } = {};
+          if (uploadSize === 'resized') {
+            uploadParams.maxWidth = 800;
+            uploadParams.maxHeight = 800;
+          }
+          const uploadResponse = await uploadImage(selectedFile, selectedItem.uniqueCode, uploadParams.maxWidth, uploadParams.maxHeight);
+          selectedItem.imagePath = uploadResponse.data.imagePath;
+        } catch (uploadError) {
+          console.error("Error uploading image", uploadError);
+          alert("Failed to upload image. Please try again.");
+          setIsUploading(false);
+          return;
+        }
+        setIsUploading(false);
+      }
+
+      console.log("Sending item data:", selectedItem);
       if (isAdding) {
-        // Add new item
-        await createItem(selectedItem);
+        // Add new item - exclude id and itemType fields
+        const itemData = {
+          name: selectedItem.name,
+          description: selectedItem.description,
+          itemTypeId: selectedItem.itemTypeId,
+          tags: selectedItem.tags,
+          imagePath: selectedItem.imagePath,
+        };
+        await createItem(itemData);
       } else {
-        // update item
-        await updateItem(selectedItem.id, selectedItem);
+        // update item - only send the fields that can be updated
+        const updateData = {
+          name: selectedItem.name,
+          description: selectedItem.description || null,
+          itemTypeId: selectedItem.itemTypeId,
+          tags: selectedItem.tags || [],
+          imagePath: selectedItem.imagePath || null,
+        };
+        await updateItem(selectedItem.id, updateData);
       }
       setShowEditDialog(false);
       setSelectedItem(null);
+      setSelectedFile(null);
+      setSelectedFile(null);
       await loadItems();
     } catch (err) {
       console.error("Error updating object", err);
+      const error = err as { response?: { data?: unknown } };
+      console.error("Error details:", error?.response?.data);
+      alert(`Error: ${error?.response?.data || 'Unknown error'}`);
     }
   };
 
@@ -211,15 +307,7 @@ const ObjectsPage = () => {
       <button
         className="mb-4 px-4 py-2 bg-green-600 text-black rounded"
         onClick={() => {
-          handleSaveEditPopup(
-            {
-              id: "CA285BA4-925C-4817-9EDE-BB84E76A84CC",
-              name: "",
-              description: "",
-              itemTypeId: ""
-            },
-            Action.ADD
-          );
+          handleSaveEditPopup(createEmptyItem(), Action.ADD);
         }}
       >
         ➕ Adaugă tip obiect
@@ -241,6 +329,12 @@ const ObjectsPage = () => {
               <td className="p-2 border-b">{item.description}</td>
               <td className="p-2 border-b">{item.itemType?.name}</td>
               <td className="p-2 border-b space-x-2">
+                <button
+                  className="text-green-600 hover:underline"
+                  onClick={() => handleViewDetail(item)}
+                >
+                  👁️
+                </button>
                 <button
                   className="text-blue-600 hover:underline"
                   onClick={() => handleSaveEditPopup(item, Action.EDIT)}
@@ -315,6 +409,76 @@ const ObjectsPage = () => {
               ))}
             </select>
           </div>
+          <div>
+            <Label className="block mb-2" htmlFor="editTags">
+              Tags (separate with commas)
+            </Label>
+            <Input
+              value={selectedItem?.tags?.join(", ") ?? ""}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                selectedItem &&
+                setSelectedItem({
+                  ...selectedItem,
+                  tags: e.target.value.split(",").map(tag => tag.trim()).filter(tag => tag.length > 0),
+                })
+              }
+              placeholder="tag1, tag2, tag3"
+            />
+          </div>
+          <div>
+            <Label className="block mb-2" htmlFor="editImagePath">
+              Image Path
+            </Label>
+            <Input
+              value={selectedItem?.imagePath ?? ""}
+              onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                selectedItem &&
+                setSelectedItem({
+                  ...selectedItem,
+                  imagePath: e.target.value,
+                })
+              }
+              placeholder="path/to/image.jpg"
+            />
+          </div>
+          <div>
+            <Label className="block mb-2" htmlFor="editImageFile">
+              Upload Image
+            </Label>
+            <div className="mb-2">
+              <Label className="text-sm">
+                <input
+                  type="radio"
+                  name="uploadSize"
+                  value="original"
+                  checked={uploadSize === 'original'}
+                  onChange={(e) => setUploadSize(e.target.value as 'original' | 'resized')}
+                  className="mr-2"
+                />
+                Original size
+              </Label>
+              <Label className="text-sm ml-4">
+                <input
+                  type="radio"
+                  name="uploadSize"
+                  value="resized"
+                  checked={uploadSize === 'resized'}
+                  onChange={(e) => setUploadSize(e.target.value as 'original' | 'resized')}
+                  className="mr-2"
+                />
+                Resize to fit 800x800 (maintains aspect ratio)
+              </Label>
+            </div>
+            <Input
+              type="file"
+              accept="image/*"
+              onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                const file = e.target.files?.[0];
+                setSelectedFile(file || null);
+              }}
+            />
+            {isUploading && <p className="text-sm text-blue-600 mt-1">Uploading image...</p>}
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>
               Anulează
@@ -341,6 +505,39 @@ const ObjectsPage = () => {
             </DialogClose>
             <Button variant="outline" onClick={handleDelete}>
               Da, șterge
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Image Preview Dialog */}
+      <Dialog open={showImageDialog} onOpenChange={setShowImageDialog}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Imagine: {selectedImageItem?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="flex justify-center">
+            {selectedImageItem?.imagePath ? (
+              <img
+                src={`http://localhost:5005/api/images/${selectedImageItem.imagePath}`}
+                alt={selectedImageItem.name}
+                className="max-w-full max-h-96 object-contain rounded"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement;
+                  target.style.display = 'none';
+                  const parent = target.parentElement;
+                  if (parent) {
+                    parent.innerHTML = '<p class="text-gray-500 text-center">Imaginea nu a putut fi încărcată</p>';
+                  }
+                }}
+              />
+            ) : (
+              <p className="text-gray-500">Nicio imagine disponibilă</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowImageDialog(false)}>
+              Închide
             </Button>
           </DialogFooter>
         </DialogContent>

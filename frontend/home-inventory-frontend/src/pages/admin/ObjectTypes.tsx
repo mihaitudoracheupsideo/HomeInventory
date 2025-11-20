@@ -107,8 +107,10 @@ const ObjectTypesPage = () => {
     if (selectedType) {
       try {
         if (isAdding) {
-          // Add new type
-          await createItemType(selectedType);
+          // Add new type - exclude id field
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+          const { id, ...typeData } = selectedType;
+          await createItemType(typeData);
         } else {
           // Update existing type
           await updateItemType(selectedType.id, selectedType);
