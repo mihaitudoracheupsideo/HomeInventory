@@ -1,35 +1,31 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { TextField, Button, Box, Typography, Paper } from '@mui/material';
-import { DataGrid, type GridColDef, type GridRenderCellParams } from '@mui/x-data-grid';
+import {
+  Box,
+  Typography,
+  Card,
+  CardContent,
+  Button,
+  List,
+  ListItem,
+  ListItemText,
+  Chip
+} from '@mui/material';
+import {
+  Inventory as InventoryIcon,
+  Category as CategoryIcon,
+  Image as ImageIcon,
+  Timeline as TimelineIcon
+} from '@mui/icons-material';
 import { getItems } from '../api/itemService';
 import { getItemTypes } from '../api/itemTypeService';
 import type { IItem } from '../types/IItem';
 import type { IItemType } from '../types/IItemType';
 
-interface SearchResult {
-  id: string;
-  name: string;
-  description: string;
-  type: 'Item' | 'ItemType';
-  itemTypeName?: string;
-}
-
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [results, setResults] = useState<SearchResult[]>([]);
   const [items, setItems] = useState<IItem[]>([]);
   const [itemTypes, setItemTypes] = useState<IItemType[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  const handleViewDetail = (result: SearchResult) => {
-    if (result.type === 'Item') {
-      navigate(`/objects/${result.id}`);
-    }
-    // For ItemType, we could navigate to a different page if needed
-    // For now, only Items have detail pages
-  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -48,74 +44,39 @@ const Dashboard: React.FC = () => {
     fetchData();
   }, []);
 
-  const handleSearch = () => {
-    if (!searchTerm.trim()) {
-      setResults([]);
-      return;
-    }
+  // Calculate statistics
+  const totalItems = items.length;
+  const totalItemTypes = itemTypes.length;
+  const itemsWithImages = items.filter(item => item.imagePath).length;
+  const recentItems = items.slice(0, 5); // Show first 5 items since we don't have createdAt
 
-    setLoading(true);
-
-    const searchResults: SearchResult[] = [];
-
-    // Search in items
-    items.forEach(item => {
-      if (
-        item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchTerm.toLowerCase())
-      ) {
-        searchResults.push({
-          id: item.id,
-          name: item.name,
-          description: item.description,
-          type: 'Item',
-          itemTypeName: item.itemType?.name || 'Unknown'
-        });
-      }
-    });
-
-    // Search in item types
-    itemTypes.forEach(itemType => {
-      if (
-        itemType.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        itemType.description.toLowerCase().includes(searchTerm.toLowerCase())
-      ) {
-        searchResults.push({
-          id: itemType.id,
-          name: itemType.name,
-          description: itemType.description,
-          type: 'ItemType'
-        });
-      }
-    });
-
-    setResults(searchResults);
-    setLoading(false);
-  };
-
-  const columns: GridColDef[] = [
-    { field: 'name', headerName: 'Name', width: 200 },
-    { field: 'description', headerName: 'Description', width: 300 },
-    { field: 'type', headerName: 'Type', width: 100 },
-    { field: 'itemTypeName', headerName: 'Item Type', width: 150 },
-    {
-      field: 'actions',
-      headerName: 'Actions',
-      width: 100,
-      sortable: false,
-      renderCell: (params: GridRenderCellParams<SearchResult>) => (
-        <Button
-          size="small"
-          variant="outlined"
-          onClick={() => handleViewDetail(params.row)}
-          disabled={params.row.type === 'ItemType'} // Only enable for Items
-          sx={{ minWidth: 'auto', px: 1 }}
-        >
-          👁️
-        </Button>
-      ),
-    },
-  ];
+  const StatCard = ({
+    title,
+    value,
+    icon,
+    color = 'primary'
+  }: {
+    title: string;
+    value: number | string;
+    icon: React.ReactNode;
+    color?: 'primary' | 'secondary' | 'success' | 'warning' | 'error';
+  }) => (
+    <Card sx={{ height: '100%' }}>
+      <CardContent>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Box sx={{ mr: 2, color: `${color}.main` }}>
+            {icon}
+          </Box>
+          <Typography variant="h6" component="div">
+            {title}
+          </Typography>
+        </Box>
+        <Typography variant="h3" component="div" sx={{ color: `${color}.main`, fontWeight: 'bold' }}>
+          {value}
+        </Typography>
+      </CardContent>
+    </Card>
+  );
 
   return (
     <Box sx={{ p: 3 }}>
@@ -123,44 +84,127 @@ const Dashboard: React.FC = () => {
         Home Inventory Dashboard
       </Typography>
 
-      <Paper sx={{ p: 2, mb: 3 }}>
-        <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-          <TextField
-            label="Search Items or Types"
-            variant="outlined"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            onKeyPress={(e) => {
-              if (e.key === 'Enter') {
-                handleSearch();
-              }
-            }}
-            sx={{ flexGrow: 1 }}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 4 }}>
+        <Box sx={{ flex: '1 1 250px', minWidth: '200px' }}>
+          <StatCard
+            title="Total Items"
+            value={totalItems}
+            icon={<InventoryIcon fontSize="large" />}
+            color="primary"
           />
-          <Button
-            variant="contained"
-            onClick={handleSearch}
-            disabled={loading}
-          >
-            Search
-          </Button>
         </Box>
-      </Paper>
+        <Box sx={{ flex: '1 1 250px', minWidth: '200px' }}>
+          <StatCard
+            title="Item Types"
+            value={totalItemTypes}
+            icon={<CategoryIcon fontSize="large" />}
+            color="secondary"
+          />
+        </Box>
+        <Box sx={{ flex: '1 1 250px', minWidth: '200px' }}>
+          <StatCard
+            title="Items with Images"
+            value={itemsWithImages}
+            icon={<ImageIcon fontSize="large" />}
+            color="success"
+          />
+        </Box>
+        <Box sx={{ flex: '1 1 250px', minWidth: '200px' }}>
+          <StatCard
+            title="Items without Images"
+            value={totalItems - itemsWithImages}
+            icon={<TimelineIcon fontSize="large" />}
+            color="warning"
+          />
+        </Box>
+      </Box>
 
-      <Paper sx={{ height: 400, width: '100%' }}>
-        <DataGrid
-          rows={results}
-          columns={columns}
-          initialState={{
-            pagination: {
-              paginationModel: { pageSize: 5 },
-            },
-          }}
-          pageSizeOptions={[5]}
-          loading={loading}
-          disableRowSelectionOnClick
-        />
-      </Paper>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+        <Box sx={{ flex: '1 1 400px', minWidth: '300px' }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" component="div" gutterBottom>
+                Recent Items
+              </Typography>
+              {recentItems.length > 0 ? (
+                <List>
+                  {recentItems.map((item) => (
+                    <ListItem
+                      key={item.id}
+                      sx={{ px: 0 }}
+                      secondaryAction={
+                        <Button
+                          size="small"
+                          onClick={() => navigate(`/objects/${item.id}`)}
+                        >
+                          View
+                        </Button>
+                      }
+                    >
+                      <ListItemText
+                        primary={item.name}
+                        secondary={
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+                            <Chip
+                              label={item.itemType?.name || 'Unknown'}
+                              size="small"
+                              variant="outlined"
+                            />
+                            {item.tags && item.tags.length > 0 && (
+                              <Typography variant="caption" color="text.secondary">
+                                Tags: {item.tags.join(', ')}
+                              </Typography>
+                            )}
+                          </Box>
+                        }
+                      />
+                    </ListItem>
+                  ))}
+                </List>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No items found
+                </Typography>
+              )}
+            </CardContent>
+          </Card>
+        </Box>
+
+        <Box sx={{ flex: '1 1 400px', minWidth: '300px' }}>
+          <Card>
+            <CardContent>
+              <Typography variant="h6" component="div" gutterBottom>
+                Quick Actions
+              </Typography>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  onClick={() => navigate('/objects')}
+                  startIcon={<InventoryIcon />}
+                >
+                  Manage Items
+                </Button>
+                <Button
+                  variant="outlined"
+                  fullWidth
+                  onClick={() => navigate('/object-types')}
+                  startIcon={<CategoryIcon />}
+                >
+                  Manage Item Types
+                </Button>
+                <Button
+                  variant="text"
+                  fullWidth
+                  onClick={() => navigate('/about')}
+                >
+                  View About Page
+                </Button>
+              </Box>
+            </CardContent>
+          </Card>
+        </Box>
+      </Box>
     </Box>
   );
 };

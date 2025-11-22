@@ -12,4 +12,7 @@ export interface IItem {
   uniqueCode?: string;
   tags: string[];
   imagePath?: string;
+  currentLocationItemId?: string;
+  currentLocationItem?: IItem;
+  addedAt?: string;
 }

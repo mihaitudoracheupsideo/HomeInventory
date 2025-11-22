@@ -15,5 +15,5 @@ export const uploadImage = (file: File, uniqueCode: string, maxWidth?: number, m
 };
 
 export const getImageUrl = (imagePath: string) => {
-  return `${api.defaults.baseURL}/images/${imagePath}`;
+  return `${api.defaults.baseURL}/images/${imagePath}?t=${Date.now()}`;
 };

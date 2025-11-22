@@ -1,6 +1,10 @@
 import { api } from "./api";
 
-export const getItems = () => api.get("/items");
+export const getItems = (search?: string) => {
+  const params = new URLSearchParams();
+  if (search) params.append('search', search);
+  return api.get(`/items?${params.toString()}`);
+};
 export const getItem = (id: unknown) => api.get(`/items/${id}`);
 export const getItemByUniqueCode = (uniqueCode: string) => api.get(`/items/code/${uniqueCode}`);
 export const createItem = (data:unknown) => api.post("/items/create", data);

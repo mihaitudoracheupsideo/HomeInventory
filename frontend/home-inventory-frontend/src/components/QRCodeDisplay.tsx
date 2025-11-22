@@ -9,7 +9,7 @@ interface QRCodeDisplayProps {
 
 const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
   value,
-  size = 128,
+  size = 100,
   className = ''
 }) => {
   return (
@@ -20,7 +20,6 @@ const QRCodeDisplay: React.FC<QRCodeDisplayProps> = ({
         level="M"
         includeMargin={true}
       />
-      <p className="text-sm text-gray-600 font-mono">{value}</p>
     </div>
   );
 };

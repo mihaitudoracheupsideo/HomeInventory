@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ChangeEvent } from "react";
+import { usePageTitle } from "../../contexts/PageTitleContext";
 import type { IItemType } from "../../types/IItemType";
 import {
   Dialog,
@@ -23,6 +24,7 @@ import type { Action as ActionType } from "../../types/Enums";
 
 import { DataGrid, type GridColDef, type GridRenderCellParams } from "@mui/x-data-grid";
 import { Box, Stack } from "@mui/material";
+import { Edit, Plus, Save, X, Tag, FileText } from "lucide-react";
 
 const ObjectTypesPage = () => {
   const [types, setTypes] = useState<IItemType[]>([]);
@@ -32,6 +34,11 @@ const ObjectTypesPage = () => {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const [isAdding, setIsAdding] = useState(false);
+  const { setTitle } = usePageTitle();
+
+  useEffect(() => {
+    setTitle("Tipuri Obiecte");
+  }, [setTitle]);
 
   const columns: GridColDef<IItemType>[] = [
     {
@@ -57,14 +64,15 @@ const ObjectTypesPage = () => {
             size="sm"
             variant="outline"
             onClick={() => handleSaveEditPopup(params.row, Action.EDIT)}
+            title="Editează"
           >
             ✏️
           </Button>
           <Button
             size="sm"
-            variant="outline"
-            color="error"
+            variant="destructive"
             onClick={() => handleDeletePopup(params.row)}
+            title="Șterge"
           >
             🗑️
           </Button>
@@ -144,68 +152,85 @@ const ObjectTypesPage = () => {
     <div>
       <h1 className="text-2xl font-bold mb-4">Tipuri de obiecte</h1>
       
-      {/* Buton Add */}
-      <button
-        className="mb-4 px-4 py-2 bg-green-600 text-black rounded"
-        onClick={() => {
-          handleSaveEditPopup(createEmptyType(), Action.ADD);
-        }}
-      >
-        ➕ Adaugă tip obiect
-      </button>
-
-      <table className="w-full bg-white border border-gray-200 shadow rounded-lg">
-        <thead>
-          <tr className="bg-gray-100 text-left">
-            <th className="p-2 border-b">Nume</th>
-            <th className="p-2 border-b">Descriere</th>
-            <th className="p-2 border-b">Acțiuni</th>
-          </tr>
-        </thead>
-        <tbody>
-          {types.map((type) => (
-            <tr key={type.id} className="hover:bg-gray-50 text-left">
-              <td className="p-2 border-b">{type.name}</td>
-              <td className="p-2 border-b">{type.description}</td>
-              <td className="p-2 border-b space-x-2">
-                <button className="text-blue-600 hover:underline" onClick={() => handleSaveEditPopup(type, Action.EDIT)}>
-                  ✏️
-                </button>
-                <button className="text-red-600 hover:underline" onClick={() => handleDeletePopup(type)}>
-                  🗑️
-                </button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{isAdding ? "Adaugare tip obiect" : "Editare tip obiect"}</DialogTitle>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="space-y-3 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100 dark:bg-blue-900/20">
+                {isAdding ? (
+                  <Plus className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                ) : (
+                  <Edit className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                )}
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-semibold">
+                  {isAdding ? "Adăugare tip obiect" : "Editare tip obiect"}
+                </DialogTitle>
+                <p className="text-sm text-muted-foreground">
+                  {isAdding ? "Creați un nou tip de obiect" : "Modificați informațiile tipului de obiect"}
+                </p>
+              </div>
+            </div>
           </DialogHeader>
-          <div>
-            <Label className="block mb-2" htmlFor="editName">Nume tip obiect</Label>
-            <Input
-              value={selectedType?.name}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => selectedType && setSelectedType({ ...selectedType, name: e.target.value })}
-              placeholder="Nume tip obiect"
-            />
+
+          <div className="space-y-6 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="editName" className="flex items-center gap-2 text-sm font-medium">
+                <Tag className="h-4 w-4 text-muted-foreground" />
+                Nume tip obiect *
+              </Label>
+              <Input
+                id="editName"
+                value={selectedType?.name || ""}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  selectedType && setSelectedType({ ...selectedType, name: e.target.value })
+                }
+                placeholder="Introduceți numele tipului de obiect"
+                className="h-11"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                Numele trebuie să fie unic și descriptiv (max. 50 caractere)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="editDescription" className="flex items-center gap-2 text-sm font-medium">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                Descriere tip obiect
+              </Label>
+              <Input
+                id="editDescription"
+                value={selectedType?.description || ""}
+                onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                  selectedType && setSelectedType({ ...selectedType, description: e.target.value })
+                }
+                placeholder="Introduceți o descriere opțională"
+                className="h-11"
+              />
+              <p className="text-xs text-muted-foreground">
+                Descrierea ajută la identificarea tipului de obiect (max. 500 caractere)
+              </p>
+            </div>
           </div>
-          <div>
-            <Label className="block mb-2" htmlFor="editDescription">Descriere tip obiect</Label>
-            <Input
-              value={selectedType?.description}
-              onChange={(e: ChangeEvent<HTMLInputElement>) => selectedType && setSelectedType({ ...selectedType, description: e.target.value})}
-              placeholder="Descriere tip obiect"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+
+          <DialogFooter className="flex gap-3 pt-6 border-t">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditDialog(false)}
+              className="flex-1 sm:flex-none"
+            >
+              <X className="h-4 w-4 mr-2" />
               Anulează
             </Button>
-            <Button variant="outline" onClick={handleSaveEdit}>
+            <Button
+              variant="default"
+              onClick={handleSaveEdit}
+              className="flex-1 sm:flex-none"
+              disabled={!selectedType?.name?.trim()}
+            >
+              <Save className="h-4 w-4 mr-2" />
               Salvează
             </Button>
           </DialogFooter>
@@ -213,29 +238,64 @@ const ObjectTypesPage = () => {
       </Dialog>
 
       <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Confirmare ștergere</DialogTitle>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader className="space-y-3 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/20">
+                <X className="h-5 w-5 text-red-600 dark:text-red-400" />
+              </div>
+              <div>
+                <DialogTitle className="text-xl font-semibold text-red-600 dark:text-red-400">
+                  Confirmare ștergere
+                </DialogTitle>
+                <p className="text-sm text-muted-foreground">
+                  Această acțiune nu poate fi anulată
+                </p>
+              </div>
+            </div>
           </DialogHeader>
-          <p>Ești sigur că vrei să ștergi "{selectedType?.name}"?</p>
-          <DialogFooter className="mt-4">
+
+          <div className="py-4">
+            <div className="rounded-lg bg-muted/50 p-4 border border-red-200 dark:border-red-800">
+              <p className="text-sm">
+                Ești sigur că vrei să ștergi tipul de obiect <strong>"{selectedType?.name}"</strong>?
+              </p>
+              <p className="text-xs text-muted-foreground mt-2">
+                Toate obiectele asociate acestui tip vor rămâne fără tip asignat.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter className="flex gap-3 pt-6 border-t">
             <DialogClose asChild>
-              <Button variant="outline">Nu</Button>
+              <Button variant="outline" className="flex-1 sm:flex-none">
+                <X className="h-4 w-4 mr-2" />
+                Nu, anulează
+              </Button>
             </DialogClose>
-            <Button variant="outline" onClick={handleDelete}>
+            <Button
+              variant="destructive"
+              onClick={handleDelete}
+              className="flex-1 sm:flex-none"
+            >
+              <X className="h-4 w-4 mr-2" />
               Da, șterge
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <div>MUI DataGrid</div>
       <Box sx={{ height: 400, width: "100%" }}>
         <Box sx={{ mb: 2 }}>
-        <Button variant="outline" onClick={() => {
-          handleSaveEditPopup(createEmptyType(), Action.ADD);
-        }}>
-          Add New
+        <Button
+          variant="default"
+          onClick={() => {
+            handleSaveEditPopup(createEmptyType(), Action.ADD);
+          }}
+          className="h-11 px-6"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Adaugă tip obiect
         </Button>
       </Box>
       <DataGrid
