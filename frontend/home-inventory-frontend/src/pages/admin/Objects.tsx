@@ -151,7 +151,7 @@ const ObjectsPage = () => {
             onClick={() => void handleSaveEditPopup(params.row, Action.EDIT)}
             title="Editează"
           >
-            ✏️ {params.row.name} {params.row.itemTypeId}
+            ✏️ 
           </Button>
           <Button
             size="sm"
