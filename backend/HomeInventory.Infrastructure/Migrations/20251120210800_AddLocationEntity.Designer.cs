@@ -3,6 +3,7 @@ using System;
 using HomeInventory.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace HomeInventory.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20251120210800_AddLocationEntity")]
+    partial class AddLocationEntity
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.8");
@@ -21,12 +24,6 @@ namespace HomeInventory.Infrastructure.Migrations
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("AddedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<Guid?>("CurrentLocationItemId")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
@@ -53,8 +50,6 @@ namespace HomeInventory.Infrastructure.Migrations
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CurrentLocationItemId");
 
                     b.HasIndex("ItemTypeId");
 
@@ -85,7 +80,7 @@ namespace HomeInventory.Infrastructure.Migrations
                     b.ToTable("ItemType");
                 });
 
-            modelBuilder.Entity("HomeInventory.Domain.LocationHistory", b =>
+            modelBuilder.Entity("HomeInventory.Domain.Location", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -93,6 +88,9 @@ namespace HomeInventory.Infrastructure.Migrations
 
                     b.Property<DateTime>("AddedAt")
                         .HasColumnType("TEXT");
+
+                    b.Property<bool>("Current")
+                        .HasColumnType("INTEGER");
 
                     b.Property<Guid>("ItemId")
                         .HasColumnType("TEXT");
@@ -104,43 +102,36 @@ namespace HomeInventory.Infrastructure.Migrations
 
                     b.HasIndex("AddedAt");
 
-                    b.HasIndex("ItemId");
-
                     b.HasIndex("LocationItemId");
 
-                    b.HasIndex("ItemId", "AddedAt");
+                    b.HasIndex("ItemId", "Current")
+                        .IsUnique()
+                        .HasFilter("[Current] = 1");
 
-                    b.ToTable("LocationHistory");
+                    b.ToTable("Location");
                 });
 
             modelBuilder.Entity("HomeInventory.Domain.Item", b =>
                 {
-                    b.HasOne("HomeInventory.Domain.Item", "CurrentLocationItem")
-                        .WithMany("StoredItems")
-                        .HasForeignKey("CurrentLocationItemId")
-                        .OnDelete(DeleteBehavior.Restrict);
-
                     b.HasOne("HomeInventory.Domain.ItemType", "ItemType")
                         .WithMany()
                         .HasForeignKey("ItemTypeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("CurrentLocationItem");
-
                     b.Navigation("ItemType");
                 });
 
-            modelBuilder.Entity("HomeInventory.Domain.LocationHistory", b =>
+            modelBuilder.Entity("HomeInventory.Domain.Location", b =>
                 {
                     b.HasOne("HomeInventory.Domain.Item", "Item")
-                        .WithMany("LocationHistory")
+                        .WithMany("Locations")
                         .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("HomeInventory.Domain.Item", "LocationItem")
-                        .WithMany()
+                        .WithMany("StoredItems")
                         .HasForeignKey("LocationItemId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
@@ -152,7 +143,7 @@ namespace HomeInventory.Infrastructure.Migrations
 
             modelBuilder.Entity("HomeInventory.Domain.Item", b =>
                 {
-                    b.Navigation("LocationHistory");
+                    b.Navigation("Locations");
 
                     b.Navigation("StoredItems");
                 });

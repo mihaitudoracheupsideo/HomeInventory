@@ -15,10 +15,10 @@ public class UpdateItemDto
 
     public Guid ItemTypeId { get; set; }
 
-    [ValidateNever]
+    [BindNever]
     public List<string>? Tags { get; set; }
 
-    [ValidateNever]
+    [BindNever]
     [JsonPropertyName("imagePath")]
     public string? ImagePath { get; set; }
 }

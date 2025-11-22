@@ -20,6 +20,7 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // Register repositories
 builder.Services.AddScoped<IItemRepository, ItemRepository>();
 builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
+builder.Services.AddScoped<ILocationRepository, LocationRepository>();
 
 // Add caching
 builder.Services.AddMemoryCache();

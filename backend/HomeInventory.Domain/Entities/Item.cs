@@ -23,4 +23,17 @@ public class Item
 
     [StringLength(500)]
     public string ImagePath { get; set; }
+
+    // Location tracking
+    public Guid? CurrentLocationItemId { get; set; }
+    public virtual Item CurrentLocationItem { get; set; }
+
+    // Audit fields
+    public DateTime AddedAt { get; set; } = DateTime.UtcNow;
+
+    // Navigation properties for location history
+    public virtual ICollection<LocationHistory> LocationHistory { get; set; } = new List<LocationHistory>();
+
+    // Navigation properties for items stored in this item
+    public virtual ICollection<Item> StoredItems { get; set; } = new List<Item>();
 }

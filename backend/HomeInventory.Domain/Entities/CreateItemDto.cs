@@ -18,4 +18,6 @@ public class CreateItemDto
     
     [StringLength(500)]
     public string ImagePath { get; set; }
+    
+    public Guid? CurrentLocationItemId { get; set; }
 }
