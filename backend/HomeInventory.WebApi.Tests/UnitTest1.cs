@@ -28,7 +28,7 @@ public class ItemsControllerTests
         {
             new Item { Id = Guid.NewGuid(), Name = "Test Item", Description = "Test Desc", ItemTypeId = Guid.NewGuid() }
         };
-        _mockRepo.Setup(repo => repo.GetItemsWithTypesAsync()).ReturnsAsync(items);
+        _mockRepo.Setup(repo => repo.GetItemsWithDependenciesAsync()).ReturnsAsync(items);
 
         // Act
         var result = await _controller.GetItems();

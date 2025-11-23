@@ -21,4 +21,7 @@ public class UpdateItemDto
     [BindNever]
     [JsonPropertyName("imagePath")]
     public string? ImagePath { get; set; }
+
+    [BindNever]
+    public Guid? CurrentLocationItemId { get; set; }
 }

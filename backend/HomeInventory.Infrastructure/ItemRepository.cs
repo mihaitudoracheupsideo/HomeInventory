@@ -10,9 +10,22 @@ public class ItemRepository : Repository<Item>, IItemRepository
     {
     }
 
-    public async Task<IEnumerable<Item>> GetItemsWithTypesAsync(string? search = null)
+    private async Task LoadFullLocationChainAsync(Item item)
     {
-        var query = _context.Item.Include(i => i.ItemType).AsQueryable();
+        var current = item.CurrentLocationItem;
+        while (current != null && current.CurrentLocationItemId != null)
+        {
+            await _context.Entry(current).Reference(i => i.CurrentLocationItem).LoadAsync();
+            current = current.CurrentLocationItem;
+        }
+    }
+
+    public async Task<IEnumerable<Item>> GetItemsWithDependenciesAsync(string? search = null)
+    {
+        var query = _context.Item
+            .Include(i => i.ItemType)
+            .Include(i => i.CurrentLocationItem)
+            .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -30,12 +43,28 @@ public class ItemRepository : Repository<Item>, IItemRepository
 
     public async Task<Item?> GetItemWithTypeAsync(Guid id)
     {
-        return await _context.Item.Include(i => i.ItemType).FirstOrDefaultAsync(i => i.Id == id);
+        var item = await _context.Item
+            .Include(i => i.ItemType)
+            .Include(i => i.CurrentLocationItem)
+            .FirstOrDefaultAsync(i => i.Id == id);
+        if (item != null)
+        {
+            await LoadFullLocationChainAsync(item);
+        }
+        return item;
     }
 
     public async Task<Item?> GetItemByUniqueCodeAsync(string uniqueCode)
     {
-        return await _context.Item.Include(i => i.ItemType).FirstOrDefaultAsync(i => i.UniqueCode == uniqueCode);
+        var item = await _context.Item
+            .Include(i => i.ItemType)
+            .Include(i => i.CurrentLocationItem)
+            .FirstOrDefaultAsync(i => i.UniqueCode == uniqueCode);
+        if (item != null)
+        {
+            await LoadFullLocationChainAsync(item);
+        }
+        return item;
     }
 
     public async Task<IEnumerable<Item>> GetItemsWithCurrentLocationsAsync(IEnumerable<Guid> itemIds)
@@ -45,5 +74,11 @@ public class ItemRepository : Repository<Item>, IItemRepository
             .Include(i => i.CurrentLocationItem)
             .Where(i => itemIds.Contains(i.Id))
             .ToListAsync();
+    }
+
+    public async Task<int> GetStoredItemsCountAsync(Guid itemId)
+    {
+        return await _context.Item
+            .CountAsync(i => i.CurrentLocationItemId == itemId);
     }
 }

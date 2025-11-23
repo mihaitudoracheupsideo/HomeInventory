@@ -7,6 +7,8 @@ import {
   deleteItem,
   getItems,
   updateItem,
+  getItem,
+  getItemsByLocation,
 } from "../../api/itemService";
 import { uploadImage } from "../../api/imageService";
 import type { IItem } from "../../types/IItem";
@@ -42,8 +44,10 @@ import {
   MapPin,
   Image as ImageIcon,
   Upload,
-  AlertCircle
+  AlertCircle,
+  AlertTriangle
 } from "lucide-react";
+import LocationHierarchy from "../../components/LocationHierarchy";
 
 const extractCollection = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) {
@@ -72,7 +76,13 @@ const ObjectsPage = () => {
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showImageDialog, setShowImageDialog] = useState(false);
+  const [showLocationHierarchyDialog, setShowLocationHierarchyDialog] = useState(false);
+  const [hierarchyItem, setHierarchyItem] = useState<IItem | null>(null);
   const [selectedImageItem, setSelectedImageItem] = useState<IItem | null>(null);
+  const [showStoredItemsDialog, setShowStoredItemsDialog] = useState(false);
+  const [storedItems, setStoredItems] = useState<IItem[]>([]);
+  const [storedItemsLoading, setStoredItemsLoading] = useState(false);
+  const [selectedContainerItem, setSelectedContainerItem] = useState<IItem | null>(null);
 
   const [isAdding, setIsAdding] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -91,8 +101,31 @@ const ObjectsPage = () => {
     {
       field: "name",
       headerName: "Nume",
-      width: 150,
+      width: 200,
       editable: true,
+      renderCell: (params: GridRenderCellParams<IItem>) => {
+        // Count stored items from the item data
+        const storedCount = params.row.storedItemsCount || 0;
+        return (
+          <div className="flex items-center gap-2">
+            <span className="truncate">{params.row.name}</span>
+            {storedCount > 0 && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleViewStoredItems(params.row);
+                }}
+                className="h-6 px-2 text-xs bg-blue-100 hover:bg-blue-200 dark:bg-blue-900/30 dark:hover:bg-blue-800/50 text-blue-700 dark:text-blue-300 rounded-full"
+                title={`Vezi ${storedCount} obiecte stocate`}
+              >
+                ({storedCount})
+              </Button>
+            )}
+          </div>
+        );
+      },
     },
     {
       field: "description",
@@ -110,8 +143,34 @@ const ObjectsPage = () => {
       field: "currentLocation",
       headerName: "Locație",
       width: 200,
-      valueGetter: (_value, row) => 
-        row.currentLocationItem ? `${row.currentLocationItem.name} (${row.currentLocationItem.uniqueCode})` : "Fără locație",
+      sortable: false,
+      align: 'center',
+      headerAlign: 'center',
+      renderCell: (params: GridRenderCellParams<IItem>) => {
+        if (params.row.currentLocationItem) {
+          return (
+            <div className="flex items-center justify-center h-full">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleViewLocationHierarchy(params.row)}
+                className="h-auto p-1 text-left justify-start font-normal hover:bg-blue-50 dark:hover:bg-blue-950/20"
+                title={`Vezi ierarhia locației: ${params.row.currentLocationItem.name}`}
+              >
+                <MapPin className="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                <span className="truncate">{params.row.currentLocationItem.name}</span>
+              </Button>
+            </div>
+          );
+        } else {
+          return (
+            <div className="flex items-center justify-center h-full gap-2 text-gray-500 dark:text-gray-400">
+              <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0" />
+              <span className="text-sm">Fără locație</span>
+            </div>
+          );
+        }
+      },
     },
     {
       field: "image",
@@ -162,6 +221,29 @@ const ObjectsPage = () => {
             🗑️
           </Button>
         </Stack>
+      ),
+    },
+  ];
+
+  // Columns for stored items popup (simplified)
+  const storedItemsColumns: GridColDef<IItem, string>[] = [
+    {
+      field: "name",
+      headerName: "Nume",
+      width: 300,
+      renderCell: (params: GridRenderCellParams<IItem>) => (
+        <span className="font-medium">{params.row.name}</span>
+      ),
+    },
+    {
+      field: "itemTypeName",
+      headerName: "Tip",
+      width: 250,
+      valueGetter: (_value, row) => row.itemType?.name ?? "Necunoscut",
+      renderCell: (params: GridRenderCellParams<IItem>) => (
+        <span className="text-gray-600 dark:text-gray-400">
+          {params.value}
+        </span>
       ),
     },
   ];
@@ -267,9 +349,30 @@ const ObjectsPage = () => {
     setShowImageDialog(true);
   };
 
-  const handleDeletePopup = (object: IItem): void => {
-    setSelectedItem(object);
-    setShowDeleteDialog(true);
+  const handleViewLocationHierarchy = async (item: IItem) => {
+    try {
+      // Load the complete item with full location hierarchy
+      const res = await getItem(item.id);
+      setHierarchyItem(res.data);
+      setShowLocationHierarchyDialog(true);
+    } catch (err) {
+      console.error("Error loading item hierarchy", err);
+    }
+  };
+
+  const handleViewStoredItems = async (item: IItem) => {
+    try {
+      setStoredItemsLoading(true);
+      setSelectedContainerItem(item);
+      const res = await getItemsByLocation(item.id);
+      const payload = extractCollection<IItem>(res.data);
+      setStoredItems(payload);
+      setShowStoredItemsDialog(true);
+    } catch (err) {
+      console.error("Error loading stored items", err);
+    } finally {
+      setStoredItemsLoading(false);
+    }
   };
 
   const handleSaveEdit = async (): Promise<void> => {
@@ -326,6 +429,7 @@ const ObjectsPage = () => {
           itemTypeId: selectedItem.itemTypeId,
           tags: selectedItem.tags || [],
           imagePath: selectedItem.imagePath || null,
+          currentLocationItemId: selectedItem.currentLocationItemId,
         };
         await updateItem(selectedItem.id, updateData);
       }
@@ -610,21 +714,98 @@ const ObjectsPage = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <Input
-                        id="editImageFile"
-                        type="file"
-                        accept="image/*"
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                          const file = e.target.files?.[0];
-                          setSelectedFile(file || null);
+                      {/* Dropzone for file upload */}
+                      <div
+                        className={`relative border-2 border-dashed rounded-lg p-6 transition-colors cursor-pointer ${
+                          selectedFile
+                            ? 'border-green-400 bg-green-50 dark:bg-green-900/20'
+                            : 'border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500'
+                        }`}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                         }}
-                        className="h-11 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
-                      />
-                      {selectedFile && (
-                        <p className="text-sm text-muted-foreground">
-                          Fișier selectat: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(2)} MB)
-                        </p>
-                      )}
+                        onDragEnter={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                        }}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          const files = e.dataTransfer.files;
+                          if (files && files[0]) {
+                            const file = files[0];
+                            if (file.type.startsWith('image/')) {
+                              setSelectedFile(file);
+                            } else {
+                              alert('Vă rugăm să selectați doar fișiere de tip imagine.');
+                            }
+                          }
+                        }}
+                        onClick={() => {
+                          // Create a hidden file input and trigger it
+                          const input = document.createElement('input');
+                          input.type = 'file';
+                          input.accept = 'image/*';
+                          input.onchange = (e) => {
+                            const target = e.target as HTMLInputElement;
+                            const file = target.files?.[0];
+                            setSelectedFile(file || null);
+                          };
+                          input.click();
+                        }}
+                      >
+                        <div className="text-center">
+                          {selectedFile ? (
+                            <div className="space-y-2">
+                              <div className="flex justify-center">
+                                <Upload className="h-8 w-8 text-green-600 dark:text-green-400" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                                  Fișier selectat
+                                </p>
+                                <p className="text-sm text-green-600 dark:text-green-400">
+                                  {selectedFile.name}
+                                </p>
+                                <p className="text-xs text-green-500 dark:text-green-500">
+                                  {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                                </p>
+                              </div>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedFile(null);
+                                }}
+                                className="mt-2"
+                              >
+                                <X className="h-4 w-4 mr-1" />
+                                Șterge
+                              </Button>
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              <div className="flex justify-center">
+                                <Upload className="h-8 w-8 text-gray-400 dark:text-gray-500" />
+                              </div>
+                              <div>
+                                <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                  Trageți și plasați imaginea aici
+                                </p>
+                                <p className="text-sm text-gray-500 dark:text-gray-400">
+                                  sau faceți clic pentru a selecta
+                                </p>
+                              </div>
+                              <p className="text-xs text-gray-400 dark:text-gray-500">
+                                PNG, JPG, GIF până la 10MB
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
                     {isUploading && (
@@ -655,7 +836,7 @@ const ObjectsPage = () => {
               disabled={!selectedItem?.name?.trim() || !selectedItem?.itemTypeId || isUploading}
             >
               <Save className="h-4 w-4 mr-2" />
-              Salvează {selectedItem?.itemTypeId} {selectedItem?.name}
+              Salvează
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -741,6 +922,89 @@ const ObjectsPage = () => {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowImageDialog(false)}>
+              Închide
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Location Hierarchy Dialog */}
+      <Dialog open={showLocationHierarchyDialog} onOpenChange={setShowLocationHierarchyDialog}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+              Ierarhia locației: {hierarchyItem?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {hierarchyItem && <LocationHierarchy item={hierarchyItem} />}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowLocationHierarchyDialog(false)}>
+              <X className="h-4 w-4 mr-2" />
+              Închide
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Stored Items Dialog */}
+      <Dialog open={showStoredItemsDialog} onOpenChange={setShowStoredItemsDialog}>
+        <DialogContent className="max-h-[80vh] max-w-4xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="w-5 h-5 text-green-600 dark:text-green-400" />
+              Obiecte stocate în: {selectedContainerItem?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            {storedItemsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <div className="text-lg">Se încarcă...</div>
+              </div>
+            ) : storedItems.length > 0 ? (
+              <Box sx={{ height: 400, width: "100%" }}>
+                <DataGrid
+                  rows={storedItems}
+                  columns={storedItemsColumns}
+                  getRowId={(row) => row.id}
+                  pageSizeOptions={[5, 10, 25]}
+                  initialState={{
+                    pagination: {
+                      paginationModel: { pageSize: 10 },
+                    },
+                  }}
+                  onRowClick={(params) => handleViewDetail(params.row)}
+                  sx={{
+                    border: 0,
+                    '& .MuiDataGrid-cell': {
+                      borderBottom: '1px solid var(--mui-palette-divider)',
+                    },
+                    '& .MuiDataGrid-columnHeaders': {
+                      backgroundColor: 'var(--mui-palette-background-paper)',
+                      borderBottom: '2px solid var(--mui-palette-divider)',
+                    },
+                    '& .MuiDataGrid-row:hover': {
+                      backgroundColor: 'rgba(59, 130, 246, 0.08)',
+                      cursor: 'pointer',
+                    },
+                    '& .MuiDataGrid-row:hover .MuiDataGrid-cell': {
+                      color: 'rgb(59, 130, 246)',
+                    },
+                  }}
+                />
+              </Box>
+            ) : (
+              <div className="flex items-center justify-center py-8 text-gray-500 dark:text-gray-400">
+                <Package className="w-8 h-8 mr-3 opacity-50" />
+                <span>Nu există obiecte stocate în acest container</span>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowStoredItemsDialog(false)}>
+              <X className="h-4 w-4 mr-2" />
               Închide
             </Button>
           </DialogFooter>

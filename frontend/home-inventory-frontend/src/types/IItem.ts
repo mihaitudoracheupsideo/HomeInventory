@@ -15,4 +15,5 @@ export interface IItem {
   currentLocationItemId?: string;
   currentLocationItem?: IItem;
   addedAt?: string;
+  storedItemsCount?: number;
 }

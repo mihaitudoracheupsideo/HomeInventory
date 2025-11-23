@@ -187,6 +187,11 @@ The application uses a modern, responsive layout with fixed proportions:
 - Handle exceptions appropriately
 - Write unit tests for business logic
 
+### Git Workflow
+- **Do not automatically stage files** with `git add .` unless explicitly requested by the user
+- Only commit and push changes when the user specifically asks for it
+- Wait for explicit user instruction before performing git operations
+
 ### Security Considerations
 - Input validation on all API endpoints
 - File upload restrictions (size, type)

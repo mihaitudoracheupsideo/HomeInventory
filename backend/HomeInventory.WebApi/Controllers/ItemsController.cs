@@ -28,18 +28,68 @@ public class ItemsController : ControllerBase
         // Don't cache search results since they are dynamic
         if (!string.IsNullOrEmpty(search))
         {
-            var searchItems = await _itemRepository.GetItemsWithTypesAsync(search);
-            var searchItemsWithLocation = await IncludeLocationInfo(searchItems);
-            var searchPaginated = searchItemsWithLocation.Skip((page - 1) * pageSize).Take(pageSize);
-            return Ok(new PaginatedResponse<object> { Data = searchPaginated, TotalCount = searchItemsWithLocation.Count() });
+            var searchItems = await _itemRepository.GetItemsWithDependenciesAsync(search);
+            var searchPaginated = searchItems.Skip((page - 1) * pageSize).Take(pageSize);
+            var searchResult = await Task.WhenAll(searchItems.Select(async item => new
+            {
+                item.Id,
+                item.Name,
+                item.Description,
+                item.UniqueCode,
+                item.Tags,
+                item.ImagePath,
+                item.AddedAt,
+                ItemTypeId = item.ItemTypeId,
+                ItemType = item.ItemType != null ? new
+                {
+                    item.ItemType.Id,
+                    item.ItemType.Name,
+                    item.ItemType.Description
+                } : null,
+                CurrentLocationItemId = item.CurrentLocationItemId,
+                currentLocationItem = item.CurrentLocationItem != null ? new
+                {
+                    item.CurrentLocationItem.Id,
+                    item.CurrentLocationItem.Name,
+                    item.CurrentLocationItem.Description,
+                    item.CurrentLocationItem.UniqueCode
+                } : null,
+                StoredItemsCount = await _itemRepository.GetStoredItemsCountAsync(item.Id)
+            }));
+            return Ok(new PaginatedResponse<object> { Data = searchResult, TotalCount = searchItems.Count() });
         }
         
         // Cache only non-search results
         var cacheKey = "items_list_all";
         if (!_cache.TryGetValue(cacheKey, out IEnumerable<object>? items))
         {
-            var allItems = await _itemRepository.GetItemsWithTypesAsync(null);
-            var itemsWithLocation = await IncludeLocationInfo(allItems);
+            var allItems = await _itemRepository.GetItemsWithDependenciesAsync(null);
+            var itemsWithLocation = await Task.WhenAll(allItems.Select(async item => new
+            {
+                item.Id,
+                item.Name,
+                item.Description,
+                item.UniqueCode,
+                item.Tags,
+                item.ImagePath,
+                item.AddedAt,
+                ItemTypeId = item.ItemTypeId,
+                ItemType = item.ItemType != null ? new
+                {
+                    item.ItemType.Id,
+                    item.ItemType.Name,
+                    item.ItemType.Description
+                } : null,
+                CurrentLocationItemId = item.CurrentLocationItemId,
+                currentLocationItem = item.CurrentLocationItem != null ? new
+                {
+                    item.CurrentLocationItem.Id,
+                    item.CurrentLocationItem.Name,
+                    item.CurrentLocationItem.Description,
+                    item.CurrentLocationItem.UniqueCode
+                } : null,
+                StoredItemsCount = await _itemRepository.GetStoredItemsCountAsync(item.Id)
+            }));
             _cache.Set(cacheKey, itemsWithLocation, TimeSpan.FromMinutes(5));
             items = itemsWithLocation;
         }
@@ -54,34 +104,24 @@ public class ItemsController : ControllerBase
         if (item == null)
             return NotFound();
 
-        // Get current location information
-        var itemWithLocation = await _itemRepository.GetItemsWithCurrentLocationsAsync(new[] { id });
-        var itemData = itemWithLocation.First();
-
         return Ok(new
         {
-            itemData.Id,
-            itemData.Name,
-            itemData.Description,
-            itemData.UniqueCode,
-            itemData.Tags,
-            itemData.ImagePath,
-            itemData.AddedAt,
-            ItemTypeId = itemData.ItemTypeId,
-            ItemType = itemData.ItemType != null ? new
+            item.Id,
+            item.Name,
+            item.Description,
+            item.UniqueCode,
+            item.Tags,
+            item.ImagePath,
+            item.AddedAt,
+            ItemTypeId = item.ItemTypeId,
+            ItemType = item.ItemType != null ? new
             {
-                itemData.ItemType.Id,
-                itemData.ItemType.Name,
-                itemData.ItemType.Description
+                item.ItemType.Id,
+                item.ItemType.Name,
+                item.ItemType.Description
             } : null,
-            CurrentLocationItemId = itemData.CurrentLocationItemId,
-            CurrentLocation = itemData.CurrentLocationItem != null ? new
-            {
-                itemData.CurrentLocationItem.Id,
-                itemData.CurrentLocationItem.Name,
-                itemData.CurrentLocationItem.Description,
-                itemData.CurrentLocationItem.UniqueCode
-            } : null
+            CurrentLocationItemId = item.CurrentLocationItemId,
+            currentLocationItem = BuildLocationItem(item.CurrentLocationItem)
         });
     }
 
@@ -91,7 +131,26 @@ public class ItemsController : ControllerBase
         var item = await _itemRepository.GetItemByUniqueCodeAsync(uniqueCode);
         if (item == null)
             return NotFound();
-        return Ok(item);
+        
+        return Ok(new
+        {
+            item.Id,
+            item.Name,
+            item.Description,
+            item.UniqueCode,
+            item.Tags,
+            item.ImagePath,
+            item.AddedAt,
+            ItemTypeId = item.ItemTypeId,
+            ItemType = item.ItemType != null ? new
+            {
+                item.ItemType.Id,
+                item.ItemType.Name,
+                item.ItemType.Description
+            } : null,
+            CurrentLocationItemId = item.CurrentLocationItemId,
+            currentLocationItem = BuildLocationItem(item.CurrentLocationItem)
+        });
     }  
 
     // POST: api/Items/create
@@ -168,6 +227,7 @@ public class ItemsController : ControllerBase
         existingItem.ItemTypeId = updateItemDto.ItemTypeId;
         existingItem.Tags = updateItemDto.Tags ?? new List<string>();
         existingItem.ImagePath = updateItemDto.ImagePath;
+        existingItem.CurrentLocationItemId = updateItemDto.CurrentLocationItemId;
 
         await _itemRepository.UpdateAsync(existingItem);
         // Clear all item-related cache entries
@@ -221,37 +281,16 @@ public class ItemsController : ControllerBase
         // for more advanced cache management in production.
     }
 
-    private async Task<IEnumerable<object>> IncludeLocationInfo(IEnumerable<Item> items)
+    private object? BuildLocationItem(Item? item)
     {
-        var itemIds = items.Select(i => i.Id).ToList();
-        
-        // Get current locations for all items in one query
-        var itemsWithLocations = await _itemRepository.GetItemsWithCurrentLocationsAsync(itemIds);
-        
-        return itemsWithLocations.Select(item => new
+        if (item == null) return null;
+        return new
         {
             item.Id,
             item.Name,
             item.Description,
             item.UniqueCode,
-            item.Tags,
-            item.ImagePath,
-            item.AddedAt,
-            ItemTypeId = item.ItemTypeId,
-            ItemType = item.ItemType != null ? new
-            {
-                item.ItemType.Id,
-                item.ItemType.Name,
-                item.ItemType.Description
-            } : null,
-            CurrentLocationItemId = item.CurrentLocationItemId,
-            CurrentLocation = item.CurrentLocationItem != null ? new
-            {
-                item.CurrentLocationItem.Id,
-                item.CurrentLocationItem.Name,
-                item.CurrentLocationItem.Description,
-                item.CurrentLocationItem.UniqueCode
-            } : null
-        });
+            currentLocationItem = BuildLocationItem(item.CurrentLocationItem)
+        };
     }
 }
