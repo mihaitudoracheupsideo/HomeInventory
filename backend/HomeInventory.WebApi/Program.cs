@@ -1,5 +1,7 @@
 using HomeInventory.Infrastructure;
 using HomeInventory.Repository;
+using HomeInventory.Application;
+using HomeInventory.Application.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.OpenApi;
 using Swashbuckle.AspNetCore.SwaggerGen;
@@ -15,12 +17,19 @@ builder.Services.AddControllers();
 
 // Adăugăm DbContext cu SQLite
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"),
+        b => b.MigrationsAssembly("HomeInventory.WebApi")));
 
 // Register repositories
 builder.Services.AddScoped<IItemRepository, ItemRepository>();
 builder.Services.AddScoped<IItemTypeRepository, ItemTypeRepository>();
 builder.Services.AddScoped<ILocationRepository, LocationRepository>();
+builder.Services.AddScoped<ITagRepository, TagRepository>();
+builder.Services.AddScoped<IItemTagRepository, ItemTagRepository>();
+
+// Register services
+builder.Services.AddScoped<ITagService, TagService>();
+builder.Services.AddScoped<ITagNormalizer, TagNormalizer>();
 
 // Add caching
 builder.Services.AddMemoryCache();
@@ -30,7 +39,18 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.AllowAnyOrigin()
+        policy.WithOrigins(
+                "http://localhost:5173",
+                "https://localhost:5173",
+                "http://192.168.1.152:5173",
+                "https://192.168.1.152:5173",
+                "http://localhost:5174",
+                "https://localhost:5174",
+                "http://localhost:5005",
+                "https://localhost:5005",
+                "https://localhost:5443",
+                "https://192.168.1.152:5443"
+              )
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -45,7 +65,15 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 app.MapControllers();
-// app.UseHttpsRedirection(); // temporarily disabled
+app.UseHttpsRedirection(); // HTTPS enabled for secure camera access
+
+// Ensure database is created and migrations are applied
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await dbContext.Database.MigrateAsync();
+    Console.WriteLine("Database migrations applied successfully");
+}
 
 Console.WriteLine("Application configured, starting...");
 

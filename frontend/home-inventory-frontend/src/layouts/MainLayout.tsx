@@ -1,15 +1,20 @@
 import { NavLink, Outlet } from "react-router-dom";
 import { useState, useEffect } from "react";
-import { Box, Typography, Divider } from "@mui/material";
+import { Box, Typography, Divider, useMediaQuery, useTheme } from "@mui/material";
+import ItemExplorer from "../components/ItemExplorer";
 import { getItems } from "../api/itemService";
 import { getItemTypes } from "../api/itemTypeService";
+import type { IItem } from "../types/IItem";
 
 const getNavStyle = ({ isActive }: { isActive: boolean }) => {
   return `px-3 py-2 rounded ${isActive ? "bg-gray-700" : "hover:bg-gray-700"}`;
 };
 
 export default function MainLayout() {
+  const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
   const [stats, setStats] = useState({ items: 0, itemTypes: 0 });
+  const [selectedItem, setSelectedItem] = useState<IItem | null>(null);
 
   useEffect(() => {
     const fetchStats = async () => {
@@ -29,6 +34,10 @@ export default function MainLayout() {
 
     fetchStats();
   }, []);
+
+  const handleItemSelect = (item: IItem) => {
+    setSelectedItem(item);
+  };
 
   return (
     <div className="flex min-h-screen">
@@ -50,6 +59,12 @@ export default function MainLayout() {
             className={(isActive) => getNavStyle(isActive)}
           >
             Obiecte
+          </NavLink>
+          <NavLink to="/reports" className={(isActive) => getNavStyle(isActive)}>
+            Reports
+          </NavLink>
+          <NavLink to="/settings" className={(isActive) => getNavStyle(isActive)}>
+            Settings
           </NavLink>
           <NavLink to="/about" className={(isActive) => getNavStyle(isActive)}>
             About
@@ -90,6 +105,21 @@ export default function MainLayout() {
           </Box>
         </Box>
       </aside>
+
+      {/* Explorer (Desktop only) */}
+      {isDesktop && (
+        <aside className="w-80 bg-white border-r border-gray-200 flex flex-col">
+          <Box sx={{ p: 2, borderBottom: 1, borderColor: 'divider' }}>
+            <Typography variant="h6">Explorer</Typography>
+          </Box>
+          <Box sx={{ flex: 1, overflow: 'hidden' }}>
+            <ItemExplorer
+              onItemSelect={handleItemSelect}
+              selectedItemId={selectedItem?.id}
+            />
+          </Box>
+        </aside>
+      )}
 
       {/* Main content */}
       <main className="flex-1 bg-gray-100 p-6 h-full w-full">

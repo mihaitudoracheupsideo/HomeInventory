@@ -4,7 +4,7 @@ import { Button } from "../components/ui/button";
 import { usePageTitle } from '../contexts/PageTitleContext';
 import StatsCard from '../components/StatsCard';
 import ItemCard from '../components/ItemCard';
-import { getItems } from '../api/itemService';
+import { getDashboardStats } from '../api/dashboardService';
 import type { IItem } from '../types/IItem';
 
 const Dashboard = () => {
@@ -26,23 +26,27 @@ const Dashboard = () => {
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        // Load recent items
-        const itemsResponse = await getItems();
-        const items = Array.isArray(itemsResponse.data)
-          ? itemsResponse.data.slice(0, 6)
-          : itemsResponse.data?.data?.slice(0, 6) || [];
+        // Load dashboard stats
+        const statsResponse = await getDashboardStats();
+        const dashboardStats = statsResponse.data;
 
-        setRecentItems(items);
-
-        // Calculate stats (in a real app, these would come from dedicated API endpoints)
         setStats({
-          totalItems: items.length > 0 ? items.length * 10 : 0, // Mock data
-          totalBoxes: 12, // Mock data
-          totalLocations: 8, // Mock data
-          recentItemsCount: items.length,
+          totalItems: dashboardStats.totalItems,
+          totalBoxes: dashboardStats.totalContainers,
+          totalLocations: dashboardStats.rootItems,
+          recentItemsCount: dashboardStats.recentItems.length,
         });
+
+        setRecentItems(dashboardStats.recentItems);
       } catch (error) {
         console.error('Error loading dashboard data:', error);
+        // Fallback to mock data if API fails
+        setStats({
+          totalItems: 0,
+          totalBoxes: 0,
+          totalLocations: 0,
+          recentItemsCount: 0,
+        });
       } finally {
         setLoading(false);
       }
@@ -64,12 +68,6 @@ const Dashboard = () => {
 
   return (
     <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Dashboard</h1>
-        <p className="text-gray-600">Welcome back! Here's an overview of your home inventory.</p>
-      </div>
-
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <StatsCard
@@ -79,13 +77,13 @@ const Dashboard = () => {
           trend={{ value: 12, positive: true }}
         />
         <StatsCard
-          title="Boxes"
+          title="Containers"
           value={stats.totalBoxes}
           icon="📦"
           trend={{ value: 5, positive: true }}
         />
         <StatsCard
-          title="Locations"
+          title="Root Items"
           value={stats.totalLocations}
           icon="📍"
           trend={{ value: 2, positive: false }}

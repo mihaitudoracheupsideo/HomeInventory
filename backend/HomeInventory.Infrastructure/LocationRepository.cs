@@ -1,4 +1,4 @@
-using HomeInventory.Domain;
+using HomeInventory.Domain.Entities;
 using HomeInventory.Repository;
 using Microsoft.EntityFrameworkCore;
 
@@ -15,10 +15,10 @@ namespace HomeInventory.Infrastructure
             // Get the current location from the Item entity
             var item = await _context.Item
                 .Where(i => i.Id == itemId)
-                .Include(i => i.CurrentLocationItem)
+                .Include(i => i.Parent)
                 .FirstOrDefaultAsync();
 
-            if (item?.CurrentLocationItemId == null)
+            if (item?.ParentItemId == null)
                 return null;
 
             // Return a LocationHistory-like object for compatibility
@@ -26,10 +26,10 @@ namespace HomeInventory.Infrastructure
             {
                 Id = Guid.NewGuid(), // Not stored, just for compatibility
                 ItemId = itemId,
-                LocationItemId = item.CurrentLocationItemId.Value,
+                LocationItemId = item.ParentItemId.Value,
                 AddedAt = item.AddedAt,
                 Item = item,
-                LocationItem = item.CurrentLocationItem
+                LocationItem = item.Parent
             };
         }
 
@@ -45,7 +45,7 @@ namespace HomeInventory.Infrastructure
         public async Task<IEnumerable<Item>> GetItemsInLocationAsync(Guid locationItemId)
         {
             return await _context.Item
-                .Where(i => i.CurrentLocationItemId == locationItemId)
+                .Where(i => i.ParentItemId == locationItemId)
                 .ToListAsync();
         }
 
@@ -61,13 +61,13 @@ namespace HomeInventory.Infrastructure
                     return false;
 
                 // If the location is changing, add the old location to history
-                if (item.CurrentLocationItemId.HasValue && item.CurrentLocationItemId != locationItemId)
+                if (item.ParentItemId.HasValue && item.ParentItemId != locationItemId)
                 {
                     var historyEntry = new LocationHistory
                     {
                         Id = Guid.NewGuid(),
                         ItemId = itemId,
-                        LocationItemId = item.CurrentLocationItemId.Value,
+                        LocationItemId = item.ParentItemId.Value,
                         AddedAt = item.AddedAt
                     };
 
@@ -75,7 +75,7 @@ namespace HomeInventory.Infrastructure
                 }
 
                 // Update the current location
-                item.CurrentLocationItemId = locationItemId;
+                item.ParentItemId = locationItemId;
                 item.AddedAt = DateTime.UtcNow;
 
                 await _context.SaveChangesAsync();

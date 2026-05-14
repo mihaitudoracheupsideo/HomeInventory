@@ -14,9 +14,8 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
   const menuItems = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard', title: 'Dashboard', icon: '📊', path: '/' },
-    { id: 'items', label: 'All Items', title: 'Obiecte', icon: '📦', path: '/objects' },
-    { id: 'boxes', label: 'Boxes', title: 'Cutii', icon: '📦', path: '/boxes' },
-    { id: 'locations', label: 'Locations', title: 'Locații', icon: '📍', path: '/locations' },
+    { id: 'items', label: 'Obiecte', title: 'Obiecte', icon: '📦', path: '/objects' },
+    { id: 'itemTypes', label: 'Tipuri obiecte', title: 'Tipuri obiecte', icon: '📦', path: '/object-types' },
     { id: 'search', label: 'Search', title: 'Căutare', icon: '🔍', path: '/search' },
     { id: 'settings', label: 'Settings', title: 'Setări', icon: '⚙️', path: '/settings' },
   ], []);

@@ -8,9 +8,8 @@ import {
   getItemByUniqueCode,
   getItems,
 } from "../../api/itemService";
-import { getItemTypes } from "../../api/itemTypeService";
+import { API_BASE_URL } from "../../api/api";
 import type { IItem } from "../../types/IItem";
-import type { IItemType } from "../../types/IItemType";
 import { Input, Textarea } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import QRCodeDisplay from "../../components/QRCodeDisplay";
@@ -18,21 +17,21 @@ import ImagePreviewModal from "../../components/ImagePreviewModal";
 import LocationPopup from "../../components/LocationPopup";
 import LocationHistory from "../../components/LocationHistory";
 import LocationHierarchy from "../../components/LocationHierarchy";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../../components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 import { Label } from "../../components/ui/label";
 import {
   DataGrid,
   type GridColDef,
-  type GridRenderCellParams,
+  type GridRowParams,
+  type GridRowSelectionModel,
+  type MuiEvent,
 } from "@mui/x-data-grid";
-import { Box, Stack } from "@mui/material";
+import { Box } from "@mui/material";
 import {
   Package,
-  FileText,
   Tag,
   MapPin,
   Upload,
-  Edit,
   Save,
   X,
   ArrowLeft,
@@ -62,19 +61,29 @@ const ItemDetailPage = () => {
   const [item, setItem] = useState<IItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [itemTypes, setItemTypes] = useState<IItemType[]>([]);
   const [storedItems, setStoredItems] = useState<IItem[]>([]);
 
   // Edit states
-  const [editingName, setEditingName] = useState(false);
-  const [editingDescription, setEditingDescription] = useState(false);
   const [editingTags, setEditingTags] = useState(false);
+
+  // Tags input states
+  const [tempTagsInput, setTempTagsInput] = useState<string>("");
+  const [tagsInputInitialized, setTagsInputInitialized] = useState<boolean>(false);
 
   // Modals
   const [showImageModal, setShowImageModal] = useState(false);
   const [showLocationPopup, setShowLocationPopup] = useState(false);
   const [showHistoryPopup, setShowHistoryPopup] = useState(false);
   const [showHierarchyPopup, setShowHierarchyPopup] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+
+  // Selection state
+  const [selectedStoredItems, setSelectedStoredItems] = useState<GridRowSelectionModel>({
+    type: "include",
+    ids: new Set(),
+  });
+  const [storedItemsPaginationModel, setStoredItemsPaginationModel] = useState({ pageSize: 5, page: 0 });
+  const selectedStoredItemIds = Array.from(selectedStoredItems.ids) as string[];
 
   const loadItem = useCallback(async () => {
     const itemId = id || uniqueCode;
@@ -90,27 +99,6 @@ const ItemDetailPage = () => {
     }
   }, [id, uniqueCode]);
 
-  const loadItemTypes = useCallback(async () => {
-    try {
-      const res = await getItemTypes();
-      const payload = extractCollection<IItemType>(res.data);
-      const isRecognizedShape =
-        Array.isArray(res.data) ||
-        (res.data &&
-          typeof res.data === "object" &&
-          ("data" in (res.data as object) || "Data" in (res.data as object)));
-
-      if (isRecognizedShape) {
-        setItemTypes(payload);
-      } else {
-        console.error("Unexpected response shape when loading item types", res.data);
-        setItemTypes([]);
-      }
-    } catch (err) {
-      console.error("Error fetching item types", err);
-    }
-  }, []);
-
   const loadStoredItems = useCallback(async () => {
     if (!item?.id) return;
 
@@ -123,11 +111,10 @@ const ItemDetailPage = () => {
         (res.data &&
           typeof res.data === "object" &&
           ("data" in (res.data as object) || "Data" in (res.data as object)));
-console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
+
       if (isRecognizedShape) {
         // Filter items that are stored in this location
-        const filteredItems = payload.filter(storedItem => storedItem.currentLocationItemId === item.id);
-        console.log("filteredItems", filteredItems)
+        const filteredItems = payload.filter(storedItem => storedItem.parentItemId === item.id);
         setStoredItems(filteredItems);
       } else {
         console.error("Unexpected response shape when loading stored items", res.data);
@@ -172,30 +159,41 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
       width: 120,
       valueGetter: (_value, row) => row.uniqueCode ?? "",
     },
-    {
-      field: "actions",
-      headerName: "Acțiuni",
-      sortable: false,
-      width: 120,
-      renderCell: (params: GridRenderCellParams<IItem>) => (
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ height: '100%' }}>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => navigate(`/objects/${params.row.id}`)}
-            title="Vezi detalii"
-          >
-            👁️
-          </Button>
-        </Stack>
-      ),
-    },
   ];
 
   useEffect(() => {
     void loadItem();
-    void loadItemTypes();
-  }, [loadItem, loadItemTypes]);
+  }, [loadItem]);
+
+  const handleStoredItemRowClick = (params: GridRowParams<IItem>, event: MuiEvent<React.MouseEvent>) => {
+    if (event.ctrlKey || event.metaKey) {
+      // Navigate to item details when CTRL is pressed
+      navigate(`/objects/${params.id}`);
+    }
+  };
+
+  const handleDeleteSelectedItems = async () => {
+    if (selectedStoredItemIds.length === 0) return;
+
+    try {
+      // Update each selected item to set ParentItemId to null
+      const updatePromises = selectedStoredItemIds.map(itemId =>
+        updateItem(itemId, { parentItemId: undefined } as Partial<IItem>)
+      );
+
+      await Promise.all(updatePromises);
+
+      // Clear selection and refresh stored items
+      setSelectedStoredItems({ type: "include", ids: new Set() });
+      setShowDeleteConfirmation(false);
+      void loadStoredItems();
+
+      toast.success(`${selectedStoredItemIds.length} obiecte au fost eliminate din container`);
+    } catch (error) {
+      console.error('Error deleting items:', error);
+      toast.error('Eroare la eliminarea obiectelor');
+    }
+  };
 
   const handleSave = async () => {
     if (!item) return;
@@ -205,9 +203,9 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
       await updateItem(item.id, item);
       toast.success("Obiectul a fost salvat cu succes!");
       // Reset all editing states
-      setEditingName(false);
-      setEditingDescription(false);
       setEditingTags(false);
+      setTempTagsInput("");
+      setTagsInputInitialized(false);
       navigate("/objects");
     } catch (err: unknown) {
       console.error("Error updating item", err);
@@ -232,8 +230,8 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
   };
 
   const handleNavigateToLocation = () => {
-    if (item?.currentLocationItem) {
-      navigate(`/objects/${item.currentLocationItem.id}`);
+    if (item?.parent) {
+      navigate(`/objects/${item.parent.id}`);
     }
   };
 
@@ -269,10 +267,51 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
           </div>
         {/* Modern Header with Item Info and QR */}
         <div className="bg-gradient-to-r from-white via-blue-50/30 to-indigo-50/30 dark:from-gray-900 dark:via-blue-950/10 dark:to-indigo-950/10 rounded-xl shadow-lg border border-blue-200/50 dark:border-blue-800/30 p-8 mb-8">
-          
 
-          <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-8 items-start">
-            {/* Left side - Item Information */}
+
+          <div className="grid grid-cols-1 lg:grid-cols-[auto_1fr_auto] gap-8 items-start">
+            {/* Left side - Image */}
+            <div className="flex-shrink-0">
+              {item.imagePath ? (
+                <div
+                  className="w-32 h-32 rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer hover:border-blue-400 transition-colors bg-white"
+                  onClick={() => setShowImageModal(true)}
+                  title="Click pentru a vedea imaginea mai mare"
+                >
+                  <img
+                    src={`${API_BASE_URL}/api/images/${item.imagePath}?t=${Date.now()}`}
+                    alt={item.name}
+                    className="w-full h-full object-cover rounded-md"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const parent = target.parentElement;
+                      if (parent) {
+                        parent.innerHTML = `
+                          <div class="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 text-sm rounded-md">
+                            No Image
+                          </div>
+                        `;
+                      }
+                    }}
+                  />
+                </div>
+              ) : (
+                <div
+                  className="w-32 h-32 rounded-lg bg-gray-100 border-2 border-gray-200 flex flex-col items-center justify-center text-gray-400 text-sm cursor-pointer hover:border-blue-400 hover:bg-blue-50 transition-colors bg-white"
+                  onClick={() => setShowImageModal(true)}
+                  title="Click pentru a adăuga o imagine"
+                >
+                  <div className="text-center">
+                    <Upload className="w-6 h-6 mx-auto mb-1 opacity-50" />
+                    <div className="text-xs">Fără imagine</div>
+                    <div className="text-xs mt-0.5">Click pentru a adăuga</div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Middle - Item Information */}
             <div className="space-y-6">
               <div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-3 leading-tight">
@@ -294,45 +333,38 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
             </div>
 
             {/* Right side - QR Code */}
-            <div className="flex flex-col items-center lg:items-end space-y-4">
-              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg border border-gray-200 dark:border-gray-700">
-                {item.uniqueCode ? (
-                  <div className="space-y-3">
-                    <QRCodeDisplay
-                          value={`${window.location.origin}/item/${item.uniqueCode}`}
-                          size={140}
-                        />
-                  </div>
-                ) : (
-                  <div className="w-40 h-40 bg-gray-100 dark:bg-gray-700 rounded-lg flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 space-y-2">
-                    <AlertTriangle className="w-8 h-8 text-red-500" />
-                    <span className="text-sm font-medium text-center">Fără cod QR</span>
-                  </div>
-                )}
-              </div>
+            <div className="flex-shrink-0">
+              {item.uniqueCode ? (
+                <QRCodeDisplay
+                      value={`${window.location.origin}/item/${item.uniqueCode}`}
+                      size={140}
+                    />
+              ) : (
+                <div className="w-40 h-40 bg-gray-100 dark:bg-gray-700 rounded-lg flex flex-col items-center justify-center text-gray-400 dark:text-gray-500 space-y-2">
+                  <AlertTriangle className="w-8 h-8 text-red-500" />
+                  <span className="text-sm font-medium text-center">Fără cod QR</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
 
         {/* Main Content Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-1 gap-6">
-          {/* Left Column - Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Basic Information Block */}
-            <div className="space-y-4 p-4 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border border-blue-200/50 dark:border-blue-800/50">
-              <div className="flex items-center gap-2 pb-2 border-b border-blue-200 dark:border-blue-700">
-                <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                <h3 className="text-lg font-medium text-blue-900 dark:text-blue-100">Informații de bază</h3>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Basic Information Block */}
+          <div className="space-y-4 p-4 rounded-lg bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-950/20 dark:to-indigo-950/20 border border-blue-200/50 dark:border-blue-800/50">
+            <div className="flex items-center gap-2 pb-2 border-b border-blue-200 dark:border-blue-700">
+              <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              <h3 className="text-lg font-medium text-blue-900 dark:text-blue-100">Informații de bază</h3>
+            </div>
 
             <div className="space-y-4">
-              <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto] gap-6">
-                {/* Left side - Name and Description */}
+              <div className="grid grid-cols-1 gap-6">
+                {/* Name and Description */}
                 <div className="space-y-4">
                   <div className="space-y-2">
                     <Label htmlFor="itemName" className="flex items-center gap-2 text-sm font-medium">
-                      <Package className="h-4 w-4 text-muted-foreground" />
-                      Nume obiect
+                      Nume
                     </Label>
                     <div className="flex items-center gap-2">
                       <Input
@@ -343,21 +375,12 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
                         }
                         className="flex-1 h-11"
                       />
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setEditingName(!editingName)}
-                        className="p-2"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="itemDescription" className="flex items-center gap-2 text-sm font-medium">
-                      <FileText className="h-4 w-4 text-muted-foreground" />
-                      Descriere obiect
+                      Descriere
                     </Label>
                     <div className="flex items-start gap-2">
                       <Textarea
@@ -367,75 +390,8 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
                         className="flex-1 min-h-[80px] resize-none"
                         rows={3}
                       />
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => setEditingDescription(!editingDescription)}
-                        className="p-2 mt-1"
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
                     </div>
                   </div>
-                </div>
-
-                {/* Right side - Image */}
-                <div className="space-y-4">
-                  {item.imagePath ? (
-                    <div className="space-y-3">
-                      <div
-                        className="w-full max-w-48 h-48 rounded-lg overflow-hidden border-2 border-gray-200 cursor-pointer hover:border-blue-400 transition-colors mx-auto"
-                        onClick={() => setShowImageModal(true)}
-                      >
-                        <img
-                          src={`http://localhost:5005/api/images/${item.imagePath}?t=${Date.now()}`}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                            const parent = target.parentElement;
-                            if (parent) {
-                              parent.innerHTML = `
-                                <div class="w-full h-full bg-gray-100 flex items-center justify-center text-gray-400 text-sm">
-                                  No Image
-                                </div>
-                              `;
-                            }
-                          }}
-                        />
-                      </div>
-                      <div className="flex justify-center">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                        onClick={() => {
-                          // TODO: Implement image replacement
-                          toast.error("Funcționalitatea de înlocuire imagine va fi implementată");
-                        }}
-                          className="px-4"
-                        >
-                          <Upload className="h-4 w-4 mr-2" />
-                          Înlocuiește imaginea
-                        </Button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="w-full max-w-48 h-48 rounded-lg bg-gray-100 border-2 border-gray-200 flex flex-col items-center justify-center text-gray-400 text-sm mx-auto">
-                      <div className="mb-2">No Image</div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          // TODO: Implement image upload
-                          toast.error("Funcționalitatea de încărcare imagine va fi implementată");
-                        }}
-                      >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Adaugă imagine
-                      </Button>
-                    </div>
-                  )}
                 </div>
               </div>
             </div>
@@ -467,7 +423,7 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
                 >
                   📋
                 </Button>
-                {item.currentLocationItem && (
+                {item.parent && (
                   <Button
                     size="sm"
                     variant="ghost"
@@ -511,51 +467,86 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
               <div className="flex items-center gap-2">
                 <Input
                   id="itemTags"
-                  value={item.tags?.join(", ") || ""}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    setItem({
-                      ...item,
-                      tags: e.target.value.split(/[,\s]+/).map(tag => tag.trim()).filter(tag => tag.length > 0)
-                    })
-                  }
+                  value={editingTags ? tempTagsInput : (item?.tags?.join(", ") || "")}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    if (editingTags) {
+                      setTempTagsInput(e.target.value);
+                    } else {
+                      setItem({
+                        ...item,
+                        tags: e.target.value.split(/[,\s]+/).map(tag => tag.trim()).filter(tag => tag.length > 0)
+                      });
+                    }
+                  }}
+                  onBlur={() => {
+                    if (editingTags) {
+                      // Process tags when input loses focus
+                      const processedTags = tempTagsInput
+                        .split(/[,\s]+/)
+                        .map(tag => tag.trim())
+                        .filter(tag => tag.length > 0);
+                      setItem({
+                        ...item,
+                        tags: processedTags,
+                      });
+                    }
+                  }}
+                  onFocus={() => {
+                    if (editingTags && !tagsInputInitialized) {
+                      // Set temp input to current tags when focusing (only once per edit session)
+                      setTempTagsInput(item?.tags?.join(", ") ?? "");
+                      setTagsInputInitialized(true);
+                    }
+                  }}
                   className="flex-1 h-11"
                 />
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setEditingTags(!editingTags)}
-                  className="p-2"
-                >
-                  <Edit className="h-4 w-4" />
-                </Button>
               </div>
             </div>
           </div>
-        </div>
 
-        {/* Stored Items Block */}
-        <div className="space-y-4 p-4 rounded-lg bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200/50 dark:border-amber-800/50">
-          <div className="flex items-center gap-2 pb-2 border-b border-amber-200 dark:border-amber-700">
-            <Archive className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-            <h3 className="text-lg font-medium text-amber-900 dark:text-amber-100">Obiecte stocate aici</h3>
-            <span className="ml-auto text-sm text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900 px-2 py-1 rounded-full">
-              {storedItems.length} obiecte
-            </span>
-          </div>
+          {/* Stored Items Block */}
+          <div className="space-y-4 p-4 rounded-lg bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-950/20 dark:to-orange-950/20 border border-amber-200/50 dark:border-amber-800/50">
+            <div className="flex items-center gap-2 pb-2 border-b border-amber-200 dark:border-amber-700">
+              <Archive className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+              <h3 className="text-lg font-medium text-amber-900 dark:text-amber-100">Obiecte stocate aici</h3>
+              <span className="ml-auto text-sm text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-900 px-2 py-1 rounded-full">
+                {storedItems.length} obiecte
+              </span>
+              {selectedStoredItemIds.length > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => setShowDeleteConfirmation(true)}
+                  className="ml-2"
+                >
+                  <X className="h-4 w-4 mr-2" />
+                  Elimină ({selectedStoredItemIds.length})
+                </Button>
+              )}
+            </div>
 
-          <div className="space-y-4">
-            {storedItems.length > 0 ? (
+            <div className="space-y-4">
               <Box sx={{ height: 300, width: "100%" }}>
                 <DataGrid
                   rows={storedItems}
                   columns={storedItemsColumns}
                   pageSizeOptions={[5, 10, 20]}
-                  initialState={{
-                    pagination: {
-                      paginationModel: { pageSize: 5, page: 0 },
-                    },
+                  paginationModel={storedItemsPaginationModel}
+                  onPaginationModelChange={setStoredItemsPaginationModel}
+                  checkboxSelection
+                  rowSelectionModel={selectedStoredItems}
+                  onRowSelectionModelChange={(newSelection) => {
+                    setSelectedStoredItems(newSelection);
                   }}
-                  disableRowSelectionOnClick
+                  onRowClick={handleStoredItemRowClick}
+                  slots={{
+                    noRowsOverlay: () => (
+                      <div className="flex flex-col items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                        <Archive className="w-12 h-12 mb-4 text-gray-300 dark:text-gray-600" />
+                        <p className="text-sm">Niciun obiect stocat în această locație</p>
+                      </div>
+                    ),
+                  }}
                   sx={{
                     '& .MuiDataGrid-cell': {
                       borderBottom: '1px solid #e5e7eb',
@@ -564,17 +555,14 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
                       backgroundColor: '#f9fafb',
                       borderBottom: '2px solid #d1d5db',
                     },
+                    '& .MuiDataGrid-row:hover': {
+                      cursor: 'pointer',
+                    },
                   }}
                 />
               </Box>
-            ) : (
-              <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-                <Archive className="w-12 h-12 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
-                <p className="text-sm">Niciun obiect stocat în această locație</p>
-              </div>
-            )}
+            </div>
           </div>
-        </div>
         </div>
 
         {/* Action Buttons */}
@@ -602,8 +590,14 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
         <ImagePreviewModal
           isOpen={showImageModal}
           onClose={() => setShowImageModal(false)}
-          imagePath={item.imagePath || ""}
-          itemName={item.name}
+          item={item}
+          onItemUpdated={(updatedItem) => {
+            setItem(updatedItem);
+            // Also update the stored items if this item is in the stored items list
+            setStoredItems(prev => prev.map(storedItem => 
+              storedItem.id === updatedItem.id ? updatedItem : storedItem
+            ));
+          }}
         />
 
         <LocationPopup
@@ -641,7 +635,7 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
                       if (!currentItem) return [];
                       
                       const nodes: React.ReactNode[] = [];
-                      let item = currentItem.currentLocationItem;
+                      let item = currentItem.parent;
                       let currentPrefix = "  => ";
                       
                       while (item) {
@@ -650,7 +644,7 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
                             {prefix + currentPrefix + item.name}
                           </div>
                         );
-                        item = item.currentLocationItem;
+                        item = item.parent;
                         currentPrefix = "      => ";
                       }
                       
@@ -662,6 +656,74 @@ console.log("isRecognizedShape", isRecognizedShape, payload, res.data)
                 </div>
               </div>
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <ImagePreviewModal
+          isOpen={showImageModal}
+          onClose={() => setShowImageModal(false)}
+          item={item}
+          onItemUpdated={(updatedItem) => {
+            setItem(updatedItem);
+            // Also update the stored items if this item is in the stored items list
+            setStoredItems(prev => prev.map(storedItem => 
+              storedItem.id === updatedItem.id ? updatedItem : storedItem
+            ));
+          }}
+        />
+
+        <Dialog open={showDeleteConfirmation} onOpenChange={setShowDeleteConfirmation}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader className="space-y-3 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/20">
+                  <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <DialogTitle className="text-xl font-semibold text-red-600 dark:text-red-400">
+                    Confirmare eliminare
+                  </DialogTitle>
+                  <p className="text-sm text-muted-foreground">
+                    Această acțiune nu poate fi anulată
+                  </p>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="py-4">
+              <div className="rounded-lg bg-red-50 dark:bg-red-900/10 p-4 border border-red-200 dark:border-red-800">
+                <div className="flex items-start gap-3">
+                  <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-red-800 dark:text-red-200 mb-1">
+                      Eliminare obiecte din container
+                    </p>
+                    <p className="text-sm text-red-700 dark:text-red-300">
+                      Vrei să elimini {selectedStoredItemIds.length} obiecte din acest container? Obiectele vor fi scoase din locația curentă.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <DialogFooter className="flex gap-3 pt-6 border-t">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteConfirmation(false)}
+                className="flex-1 sm:flex-none"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Nu, anulează
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteSelectedItems}
+                className="flex-1 sm:flex-none"
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                Da, elimină
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

@@ -1,5 +1,5 @@
 using HomeInventory.Repository;
-using HomeInventory.Domain;
+using HomeInventory.Domain.Entities;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 
@@ -50,7 +50,12 @@ namespace HomeInventory.WebApi.Controllers
             {
                 Id = Guid.NewGuid(),
                 Name = createItemTypeDto.Name,
-                Description = createItemTypeDto.Description
+                Description = createItemTypeDto.Description,
+                Icon = createItemTypeDto.Icon,
+                CanContainItems = createItemTypeDto.CanContainItems,
+                IsLeaf = createItemTypeDto.IsLeaf,
+                Color = createItemTypeDto.Color,
+                SortOrder = createItemTypeDto.SortOrder
             };
             
             await _itemTypeRepository.AddAsync(itemType);

@@ -1,4 +1,4 @@
-using HomeInventory.Domain;
+using HomeInventory.Domain.Entities;
 using HomeInventory.Repository;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,13 +10,13 @@ public class ItemRepository : Repository<Item>, IItemRepository
     {
     }
 
-    private async Task LoadFullLocationChainAsync(Item item)
+    private async Task LoadFullParentChainAsync(Item item)
     {
-        var current = item.CurrentLocationItem;
-        while (current != null && current.CurrentLocationItemId != null)
+        var current = item.Parent;
+        while (current != null && current.ParentItemId != null)
         {
-            await _context.Entry(current).Reference(i => i.CurrentLocationItem).LoadAsync();
-            current = current.CurrentLocationItem;
+            await _context.Entry(current).Reference(i => i.Parent).LoadAsync();
+            current = current.Parent;
         }
     }
 
@@ -24,16 +24,18 @@ public class ItemRepository : Repository<Item>, IItemRepository
     {
         var query = _context.Item
             .Include(i => i.ItemType)
-            .Include(i => i.CurrentLocationItem)
+            .Include(i => i.Parent)
+            .Include(i => i.ItemTags)
+                .ThenInclude(it => it.Tag)
             .AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            // Search in Name, Description, Tags (joined), and ItemType.Name
+            // Search in Name, Description, Tags (through ItemTags), and ItemType.Name
             query = query.Where(i =>
                 EF.Functions.Like(i.Name, $"%{search}%") ||
                 (!string.IsNullOrEmpty(i.Description) && EF.Functions.Like(i.Description, $"%{search}%")) ||
-                (i.Tags != null && i.Tags.Any(tag => EF.Functions.Like(tag, $"%{search}%"))) ||
+                (i.ItemTags != null && i.ItemTags.Any(it => EF.Functions.Like(it.Tag.Name, $"%{search}%"))) ||
                 (i.ItemType != null && EF.Functions.Like(i.ItemType.Name, $"%{search}%"))
             );
         }
@@ -45,11 +47,11 @@ public class ItemRepository : Repository<Item>, IItemRepository
     {
         var item = await _context.Item
             .Include(i => i.ItemType)
-            .Include(i => i.CurrentLocationItem)
+            .Include(i => i.Parent)
             .FirstOrDefaultAsync(i => i.Id == id);
         if (item != null)
         {
-            await LoadFullLocationChainAsync(item);
+            await LoadFullParentChainAsync(item);
         }
         return item;
     }
@@ -58,27 +60,139 @@ public class ItemRepository : Repository<Item>, IItemRepository
     {
         var item = await _context.Item
             .Include(i => i.ItemType)
-            .Include(i => i.CurrentLocationItem)
+            .Include(i => i.Parent)
             .FirstOrDefaultAsync(i => i.UniqueCode == uniqueCode);
         if (item != null)
         {
-            await LoadFullLocationChainAsync(item);
+            await LoadFullParentChainAsync(item);
         }
         return item;
     }
 
-    public async Task<IEnumerable<Item>> GetItemsWithCurrentLocationsAsync(IEnumerable<Guid> itemIds)
+    public async Task<IEnumerable<Item>> GetItemsWithParentsAsync(IEnumerable<Guid> itemIds)
     {
         return await _context.Item
             .Include(i => i.ItemType)
-            .Include(i => i.CurrentLocationItem)
+            .Include(i => i.Parent)
             .Where(i => itemIds.Contains(i.Id))
             .ToListAsync();
     }
 
-    public async Task<int> GetStoredItemsCountAsync(Guid itemId)
+    public async Task<int> GetChildrenCountAsync(Guid itemId)
     {
         return await _context.Item
-            .CountAsync(i => i.CurrentLocationItemId == itemId);
+            .CountAsync(i => i.ParentItemId == itemId);
+    }
+
+    public async Task<IEnumerable<Item>> GetSubtreeAsync(Guid parentId)
+    {
+        var parent = await _context.Item.FirstOrDefaultAsync(i => i.Id == parentId);
+        if (parent == null) return new List<Item>();
+
+        return await _context.Item
+            .Include(i => i.ItemType)
+            .Where(i => EF.Functions.Like(i.Path, $"{parent.Path}%"))
+            .OrderBy(i => i.Path)
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<Item>> GetRootItemsAsync()
+    {
+        return await _context.Item
+            .Include(i => i.ItemType)
+            .Where(i => i.ParentItemId == null)
+            .OrderBy(i => i.NodeIndex)
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<Item>> GetByParentAsync(Guid? parentId)
+    {
+        return await _context.Item
+            .Include(i => i.ItemType)
+            .Where(i => i.ParentItemId == parentId)
+            .OrderBy(i => i.NodeIndex)
+            .ToListAsync();
+    }
+
+    public override async Task AddAsync(Item item)
+    {
+        // Compute NodeIndex
+        var maxNodeIndex = await _context.Item.MaxAsync(i => (int?)i.NodeIndex) ?? 0;
+        item.NodeIndex = maxNodeIndex + 1;
+
+        // Compute Path and Depth
+        if (item.ParentItemId.HasValue)
+        {
+            var parent = await _context.Item.FirstOrDefaultAsync(i => i.Id == item.ParentItemId.Value);
+            if (parent != null)
+            {
+                item.Path = $"{parent.Path}{item.NodeIndex}/";
+                item.Depth = parent.Depth + 1;
+            }
+            else
+            {
+                item.Path = $"/{item.NodeIndex}/";
+                item.Depth = 0;
+            }
+        }
+        else
+        {
+            item.Path = $"/{item.NodeIndex}/";
+            item.Depth = 0;
+        }
+
+        await base.AddAsync(item);
+    }
+
+    public override async Task UpdateAsync(Item item)
+    {
+        var existing = await _context.Item.AsNoTracking().FirstOrDefaultAsync(i => i.Id == item.Id);
+        if (existing == null) throw new InvalidOperationException("Item not found");
+
+        // If parent changed, recalculate path and depth for subtree
+        if (existing.ParentItemId != item.ParentItemId)
+        {
+            await RecalculateSubtreePathAndDepthAsync(item);
+        }
+
+        await base.UpdateAsync(item);
+    }
+
+    private async Task RecalculateSubtreePathAndDepthAsync(Item item)
+    {
+        // Compute new path and depth for the item
+        if (item.ParentItemId.HasValue)
+        {
+            var parent = await _context.Item.FirstOrDefaultAsync(i => i.Id == item.ParentItemId.Value);
+            if (parent != null)
+            {
+                item.Path = $"{parent.Path}{item.NodeIndex}/";
+                item.Depth = parent.Depth + 1;
+            }
+            else
+            {
+                item.Path = $"/{item.NodeIndex}/";
+                item.Depth = 0;
+            }
+        }
+        else
+        {
+            item.Path = $"/{item.NodeIndex}/";
+            item.Depth = 0;
+        }
+
+        // Update descendants
+        var descendants = await _context.Item
+            .Where(i => EF.Functions.Like(i.Path, $"{item.Path}%"))
+            .ToListAsync();
+
+        foreach (var desc in descendants)
+        {
+            if (desc.Id != item.Id)
+            {
+                desc.Path = desc.Path.Replace(item.Path.TrimEnd('/'), item.Path);
+                desc.Depth = item.Depth + (desc.Depth - item.Depth);
+            }
+        }
     }
 }

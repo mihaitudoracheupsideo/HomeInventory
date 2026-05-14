@@ -65,7 +65,7 @@ const LocationHierarchy: React.FC<LocationHierarchyProps> = ({ item }) => {
             }`} />
           </button>
         </div>
-        {renderHierarchyLevel(currentItem.currentLocationItem || null, depth + 1, visited)}
+        {renderHierarchyLevel(currentItem.parent || null, depth + 1, visited)}
       </div>
     );
   };
@@ -73,8 +73,8 @@ const LocationHierarchy: React.FC<LocationHierarchyProps> = ({ item }) => {
   return (
     <div className="space-y-2">
       {/* Parent Chain - Recursive */}
-      {item.currentLocationItem ? (
-        renderHierarchyLevel(item.currentLocationItem, 0)
+      {item.parent ? (
+        renderHierarchyLevel(item.parent, 0)
       ) : (
         <div className="flex items-center gap-2 p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-md">
           <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />

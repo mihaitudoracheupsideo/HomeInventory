@@ -144,12 +144,12 @@ const LocationPopup = ({ isOpen, onClose, item, onLocationChanged }: LocationPop
           {/* Current Location Info */}
           <div className="bg-blue-50 p-4 rounded-lg">
             <h3 className="font-semibold text-blue-900 mb-2">Locație Curentă</h3>
-            {item.currentLocationItem ? (
+            {item.parent ? (
               <div className="text-blue-800">
-                <div className="font-medium">{item.currentLocationItem.name}</div>
-                <div className="text-sm">{item.currentLocationItem.uniqueCode}</div>
-                {item.currentLocationItem.description && (
-                  <div className="text-sm mt-1">{item.currentLocationItem.description}</div>
+                <div className="font-medium">{item.parent.name}</div>
+                <div className="text-sm">{item.parent.uniqueCode}</div>
+                {item.parent.description && (
+                  <div className="text-sm mt-1">{item.parent.description}</div>
                 )}
               </div>
             ) : (

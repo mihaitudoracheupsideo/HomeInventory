@@ -17,7 +17,7 @@ namespace HomeInventory.Infrastructure.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.8");
 
-            modelBuilder.Entity("HomeInventory.Domain.Item", b =>
+            modelBuilder.Entity("HomeInventory.Domain.Entities.Item", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -26,8 +26,8 @@ namespace HomeInventory.Infrastructure.Migrations
                     b.Property<DateTime>("AddedAt")
                         .HasColumnType("TEXT");
 
-                    b.Property<Guid?>("CurrentLocationItemId")
-                        .HasColumnType("TEXT");
+                    b.Property<int>("Depth")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Description")
                         .HasMaxLength(500)
@@ -45,38 +45,86 @@ namespace HomeInventory.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
-                    b.PrimitiveCollection<string>("Tags")
+                    b.Property<int>("NodeIndex")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("ParentItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Path")
+                        .HasMaxLength(500)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("UniqueCode")
                         .HasMaxLength(8)
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("CurrentLocationItemId");
+                    b.HasIndex("Depth");
 
                     b.HasIndex("ItemTypeId");
 
                     b.HasIndex("Name");
 
+                    b.HasIndex("NodeIndex");
+
+                    b.HasIndex("ParentItemId");
+
+                    b.HasIndex("Path");
+
                     b.ToTable("Item");
                 });
 
-            modelBuilder.Entity("HomeInventory.Domain.ItemType", b =>
+            modelBuilder.Entity("HomeInventory.Domain.Entities.ItemTag", b =>
+                {
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("TagId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("ItemId", "TagId");
+
+                    b.HasIndex("TagId");
+
+                    b.ToTable("ItemTags");
+                });
+
+            modelBuilder.Entity("HomeInventory.Domain.Entities.ItemType", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("CanContainItems")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(7)
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
                         .HasMaxLength(200)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("Icon")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsLeaf")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(50)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
 
@@ -85,7 +133,7 @@ namespace HomeInventory.Infrastructure.Migrations
                     b.ToTable("ItemType");
                 });
 
-            modelBuilder.Entity("HomeInventory.Domain.LocationHistory", b =>
+            modelBuilder.Entity("HomeInventory.Domain.Entities.LocationHistory", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -113,33 +161,89 @@ namespace HomeInventory.Infrastructure.Migrations
                     b.ToTable("LocationHistory");
                 });
 
-            modelBuilder.Entity("HomeInventory.Domain.Item", b =>
+            modelBuilder.Entity("HomeInventory.Domain.Entities.Tag", b =>
                 {
-                    b.HasOne("HomeInventory.Domain.Item", "CurrentLocationItem")
-                        .WithMany("StoredItems")
-                        .HasForeignKey("CurrentLocationItemId")
-                        .OnDelete(DeleteBehavior.Restrict);
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
 
-                    b.HasOne("HomeInventory.Domain.ItemType", "ItemType")
+                    b.Property<string>("Color")
+                        .HasMaxLength(7)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Icon")
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.HasIndex("NormalizedName")
+                        .IsUnique();
+
+                    b.ToTable("Tags");
+                });
+
+            modelBuilder.Entity("HomeInventory.Domain.Entities.Item", b =>
+                {
+                    b.HasOne("HomeInventory.Domain.Entities.ItemType", "ItemType")
                         .WithMany()
                         .HasForeignKey("ItemTypeId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("CurrentLocationItem");
+                    b.HasOne("HomeInventory.Domain.Entities.Item", "Parent")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentItemId")
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.Navigation("ItemType");
+
+                    b.Navigation("Parent");
                 });
 
-            modelBuilder.Entity("HomeInventory.Domain.LocationHistory", b =>
+            modelBuilder.Entity("HomeInventory.Domain.Entities.ItemTag", b =>
                 {
-                    b.HasOne("HomeInventory.Domain.Item", "Item")
+                    b.HasOne("HomeInventory.Domain.Entities.Item", "Item")
+                        .WithMany("ItemTags")
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HomeInventory.Domain.Entities.Tag", "Tag")
+                        .WithMany("ItemTags")
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("Tag");
+                });
+
+            modelBuilder.Entity("HomeInventory.Domain.Entities.LocationHistory", b =>
+                {
+                    b.HasOne("HomeInventory.Domain.Entities.Item", "Item")
                         .WithMany("LocationHistory")
                         .HasForeignKey("ItemId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.HasOne("HomeInventory.Domain.Item", "LocationItem")
+                    b.HasOne("HomeInventory.Domain.Entities.Item", "LocationItem")
                         .WithMany()
                         .HasForeignKey("LocationItemId")
                         .OnDelete(DeleteBehavior.Restrict)
@@ -150,11 +254,18 @@ namespace HomeInventory.Infrastructure.Migrations
                     b.Navigation("LocationItem");
                 });
 
-            modelBuilder.Entity("HomeInventory.Domain.Item", b =>
+            modelBuilder.Entity("HomeInventory.Domain.Entities.Item", b =>
                 {
-                    b.Navigation("LocationHistory");
+                    b.Navigation("Children");
 
-                    b.Navigation("StoredItems");
+                    b.Navigation("ItemTags");
+
+                    b.Navigation("LocationHistory");
+                });
+
+            modelBuilder.Entity("HomeInventory.Domain.Entities.Tag", b =>
+                {
+                    b.Navigation("ItemTags");
                 });
 #pragma warning restore 612, 618
         }

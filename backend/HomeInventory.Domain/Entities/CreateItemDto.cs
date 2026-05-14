@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace HomeInventory.Domain;
+namespace HomeInventory.Domain.Entities;
 
 public class CreateItemDto
 {
@@ -19,5 +19,5 @@ public class CreateItemDto
     [StringLength(500)]
     public string ImagePath { get; set; }
     
-    public Guid? CurrentLocationItemId { get; set; }
+    public Guid? ParentItemId { get; set; }
 }

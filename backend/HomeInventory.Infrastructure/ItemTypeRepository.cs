@@ -1,4 +1,4 @@
-using HomeInventory.Domain;
+using HomeInventory.Domain.Entities;
 using HomeInventory.Repository;
 
 namespace HomeInventory.Infrastructure;

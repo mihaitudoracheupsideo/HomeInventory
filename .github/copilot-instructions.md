@@ -218,3 +218,7 @@ The application uses a modern, responsive layout with fixed proportions:
 - Build failures: Ensure all NuGet packages are restored
 - Frontend errors: Check console for TypeScript/compilation errors
 - Image upload issues: Verify file size limits and supported formats
+
+# IMPORTANT!!! When needed, use (see those files from the path):
+#ai_instructions/instructions.md
+#ai_instructions/instructions-details.md

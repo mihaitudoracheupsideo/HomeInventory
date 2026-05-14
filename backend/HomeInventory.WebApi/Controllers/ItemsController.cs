@@ -1,5 +1,6 @@
-using HomeInventory.Domain;
+using HomeInventory.Domain.Entities;
 using HomeInventory.Repository;
+using HomeInventory.Application;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.EntityFrameworkCore;
@@ -12,12 +13,14 @@ public class ItemsController : ControllerBase
 {
     private readonly IItemRepository _itemRepository;
     private readonly IItemTypeRepository _itemTypeRepository;
+    private readonly ITagService _tagService;
     private readonly IMemoryCache _cache;
 
-    public ItemsController(IItemRepository itemRepository, IItemTypeRepository itemTypeRepository, IMemoryCache cache)
+    public ItemsController(IItemRepository itemRepository, IItemTypeRepository itemTypeRepository, ITagService tagService, IMemoryCache cache)
     {
         _itemRepository = itemRepository;
         _itemTypeRepository = itemTypeRepository;
+        _tagService = tagService;
         _cache = cache;
     }
 
@@ -36,7 +39,7 @@ public class ItemsController : ControllerBase
                 item.Name,
                 item.Description,
                 item.UniqueCode,
-                item.Tags,
+                Tags = await GetItemTagNamesAsync(item.Id),
                 item.ImagePath,
                 item.AddedAt,
                 ItemTypeId = item.ItemTypeId,
@@ -46,15 +49,15 @@ public class ItemsController : ControllerBase
                     item.ItemType.Name,
                     item.ItemType.Description
                 } : null,
-                CurrentLocationItemId = item.CurrentLocationItemId,
-                currentLocationItem = item.CurrentLocationItem != null ? new
+                ParentItemId = item.ParentItemId,
+                parent = item.Parent != null ? new
                 {
-                    item.CurrentLocationItem.Id,
-                    item.CurrentLocationItem.Name,
-                    item.CurrentLocationItem.Description,
-                    item.CurrentLocationItem.UniqueCode
+                    item.Parent.Id,
+                    item.Parent.Name,
+                    item.Parent.Description,
+                    item.Parent.UniqueCode
                 } : null,
-                StoredItemsCount = await _itemRepository.GetStoredItemsCountAsync(item.Id)
+                ChildrenCount = await _itemRepository.GetChildrenCountAsync(item.Id)
             }));
             return Ok(new PaginatedResponse<object> { Data = searchResult, TotalCount = searchItems.Count() });
         }
@@ -70,7 +73,7 @@ public class ItemsController : ControllerBase
                 item.Name,
                 item.Description,
                 item.UniqueCode,
-                item.Tags,
+                Tags = await GetItemTagNamesAsync(item.Id),
                 item.ImagePath,
                 item.AddedAt,
                 ItemTypeId = item.ItemTypeId,
@@ -80,15 +83,15 @@ public class ItemsController : ControllerBase
                     item.ItemType.Name,
                     item.ItemType.Description
                 } : null,
-                CurrentLocationItemId = item.CurrentLocationItemId,
-                currentLocationItem = item.CurrentLocationItem != null ? new
+                ParentItemId = item.ParentItemId,
+                parent = item.Parent != null ? new
                 {
-                    item.CurrentLocationItem.Id,
-                    item.CurrentLocationItem.Name,
-                    item.CurrentLocationItem.Description,
-                    item.CurrentLocationItem.UniqueCode
+                    item.Parent.Id,
+                    item.Parent.Name,
+                    item.Parent.Description,
+                    item.Parent.UniqueCode
                 } : null,
-                StoredItemsCount = await _itemRepository.GetStoredItemsCountAsync(item.Id)
+                ChildrenCount = await _itemRepository.GetChildrenCountAsync(item.Id)
             }));
             _cache.Set(cacheKey, itemsWithLocation, TimeSpan.FromMinutes(5));
             items = itemsWithLocation;
@@ -110,7 +113,7 @@ public class ItemsController : ControllerBase
             item.Name,
             item.Description,
             item.UniqueCode,
-            item.Tags,
+            Tags = await GetItemTagNamesAsync(item.Id),
             item.ImagePath,
             item.AddedAt,
             ItemTypeId = item.ItemTypeId,
@@ -120,8 +123,8 @@ public class ItemsController : ControllerBase
                 item.ItemType.Name,
                 item.ItemType.Description
             } : null,
-            CurrentLocationItemId = item.CurrentLocationItemId,
-            currentLocationItem = BuildLocationItem(item.CurrentLocationItem)
+            ParentItemId = item.ParentItemId,
+            parent = BuildLocationItem(item.Parent)
         });
     }
 
@@ -138,7 +141,7 @@ public class ItemsController : ControllerBase
             item.Name,
             item.Description,
             item.UniqueCode,
-            item.Tags,
+            Tags = await GetItemTagNamesAsync(item.Id),
             item.ImagePath,
             item.AddedAt,
             ItemTypeId = item.ItemTypeId,
@@ -148,10 +151,120 @@ public class ItemsController : ControllerBase
                 item.ItemType.Name,
                 item.ItemType.Description
             } : null,
-            CurrentLocationItemId = item.CurrentLocationItemId,
-            currentLocationItem = BuildLocationItem(item.CurrentLocationItem)
+            ParentItemId = item.ParentItemId,
+            parent = BuildLocationItem(item.Parent)
         });
-    }  
+    }
+
+    // GET: api/items/tree
+    [HttpGet("tree")]
+    public async Task<IActionResult> GetTree()
+    {
+        var rootItems = await _itemRepository.GetRootItemsAsync();
+        var tree = new List<object>();
+
+        foreach (var root in rootItems)
+        {
+            tree.Add(await BuildTreeNodeAsync(root));
+        }
+
+        return Ok(tree);
+    }
+
+    // GET: api/items/{id}/children
+    [HttpGet("{id}/children")]
+    public async Task<IActionResult> GetChildren(Guid id)
+    {
+        var children = await _itemRepository.GetByParentAsync(id);
+        var result = await Task.WhenAll(children.Select(async child => new
+        {
+            child.Id,
+            child.Name,
+            child.Description,
+            child.UniqueCode,
+            Tags = await GetItemTagNamesAsync(child.Id),
+            child.ImagePath,
+            child.AddedAt,
+            child.UpdatedAt,
+            child.NodeIndex,
+            child.Path,
+            child.Depth,
+            ItemTypeId = child.ItemTypeId,
+            ItemType = child.ItemType != null ? new
+            {
+                child.ItemType.Id,
+                child.ItemType.Name,
+                    child.ItemType.Description,
+                    child.ItemType.Icon,
+                    child.ItemType.CanContainItems,
+                    child.ItemType.IsLeaf,
+                    child.ItemType.Color,
+                    child.ItemType.SortOrder
+                } : null,
+                ChildrenCount = await _itemRepository.GetChildrenCountAsync(child.Id)
+            }));
+        return Ok(result);
+    }
+
+    // GET: api/items/{id}/subtree
+    [HttpGet("{id}/subtree")]
+    public async Task<IActionResult> GetSubtree(Guid id)
+    {
+        var subtree = await _itemRepository.GetSubtreeAsync(id);
+        var result = await Task.WhenAll(subtree.Select(async item => new
+        {
+            item.Id,
+            item.Name,
+            item.Description,
+            item.UniqueCode,
+            Tags = await GetItemTagNamesAsync(item.Id),
+            item.ImagePath,
+            item.AddedAt,
+            item.UpdatedAt,
+            item.NodeIndex,
+            item.Path,
+            item.Depth,
+            ItemTypeId = item.ItemTypeId,
+            ItemType = item.ItemType != null ? new
+            {
+                item.ItemType.Id,
+                item.ItemType.Name,
+                item.ItemType.Description,
+                item.ItemType.Icon,
+                item.ItemType.CanContainItems,
+                item.ItemType.IsLeaf,
+                item.ItemType.Color,
+                item.ItemType.SortOrder
+            } : null
+        }));
+        return Ok(result);
+    }
+
+    // GET: api/items/{id}/breadcrumbs
+    [HttpGet("{id}/breadcrumbs")]
+    public async Task<IActionResult> GetBreadcrumbs(Guid id)
+    {
+        var item = await _itemRepository.GetItemWithTypeAsync(id);
+        if (item == null) return NotFound();
+
+        var breadcrumbs = new List<object>();
+        var current = item;
+
+        while (current != null)
+        {
+            breadcrumbs.Insert(0, new
+            {
+                current.Id,
+                current.Name,
+                current.UniqueCode,
+                current.Depth
+            });
+
+            current = current.Parent;
+        }
+
+        return Ok(breadcrumbs);
+    }
 
     // POST: api/Items/create
     [HttpPost("create")]
@@ -191,9 +304,8 @@ public class ItemsController : ControllerBase
             Name = createItemDto.Name,
             Description = createItemDto.Description,
             ItemTypeId = createItemDto.ItemTypeId,
-            Tags = createItemDto.Tags ?? new List<string>(),
             ImagePath = createItemDto.ImagePath,
-            CurrentLocationItemId = createItemDto.CurrentLocationItemId,
+            ParentItemId = createItemDto.ParentItemId,
             AddedAt = DateTime.UtcNow,
         };
         
@@ -203,6 +315,13 @@ public class ItemsController : ControllerBase
         Console.WriteLine($"Generated UniqueCode: {item.UniqueCode}");
         
         await _itemRepository.AddAsync(item);
+        
+        // Assign tags if provided
+        if (createItemDto.Tags != null && createItemDto.Tags.Any())
+        {
+            await _tagService.AssignTagsToItemAsync(item.Id, createItemDto.Tags);
+        }
+        
         // Clear all item-related cache entries
         ClearItemCache();
         return CreatedAtAction(nameof(GetById), new { id = item.Id }, item);
@@ -225,11 +344,17 @@ public class ItemsController : ControllerBase
         existingItem.Name = updateItemDto.Name;
         existingItem.Description = updateItemDto.Description;
         existingItem.ItemTypeId = updateItemDto.ItemTypeId;
-        existingItem.Tags = updateItemDto.Tags ?? new List<string>();
         existingItem.ImagePath = updateItemDto.ImagePath;
-        existingItem.CurrentLocationItemId = updateItemDto.CurrentLocationItemId;
+        existingItem.ParentItemId = updateItemDto.ParentItemId;
 
         await _itemRepository.UpdateAsync(existingItem);
+        
+        // Update tags if provided
+        if (updateItemDto.Tags != null)
+        {
+            await _tagService.AssignTagsToItemAsync(existingItem.Id, updateItemDto.Tags);
+        }
+
         // Clear all item-related cache entries
         ClearItemCache();
         return NoContent();
@@ -281,6 +406,51 @@ public class ItemsController : ControllerBase
         // for more advanced cache management in production.
     }
 
+    private async Task<object> BuildTreeNodeAsync(Item item)
+    {
+        var children = await _itemRepository.GetByParentAsync(item.Id);
+        var childrenNodes = new List<object>();
+
+        foreach (var child in children)
+        {
+            childrenNodes.Add(await BuildTreeNodeAsync(child));
+        }
+
+        return new
+        {
+            item.Id,
+            item.Name,
+            item.Description,
+            item.UniqueCode,
+            Tags = await GetItemTagNamesAsync(item.Id),
+            item.ImagePath,
+            item.AddedAt,
+            item.UpdatedAt,
+            item.NodeIndex,
+            item.Path,
+            item.Depth,
+            ItemTypeId = item.ItemTypeId,
+            ItemType = item.ItemType != null ? new
+            {
+                item.ItemType.Id,
+                item.ItemType.Name,
+                item.ItemType.Description,
+                item.ItemType.Icon,
+                item.ItemType.CanContainItems,
+                item.ItemType.IsLeaf,
+                item.ItemType.Color,
+                item.ItemType.SortOrder
+            } : null,
+            Children = childrenNodes
+        };
+    }
+
+    private async Task<List<string>> GetItemTagNamesAsync(Guid itemId)
+    {
+        var tags = await _tagService.GetItemTagsAsync(itemId);
+        return tags.Select(t => t.Name).ToList();
+    }
+
     private object? BuildLocationItem(Item? item)
     {
         if (item == null) return null;
@@ -290,7 +460,7 @@ public class ItemsController : ControllerBase
             item.Name,
             item.Description,
             item.UniqueCode,
-            currentLocationItem = BuildLocationItem(item.CurrentLocationItem)
+            parent = BuildLocationItem(item.Parent)
         };
     }
 }

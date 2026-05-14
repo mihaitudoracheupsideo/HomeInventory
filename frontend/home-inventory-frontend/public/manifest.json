@@ -1,0 +1,28 @@
+{
+  "name": "HomeInventory Mobile",
+  "short_name": "HomeInventory",
+  "description": "Mobile interface for adding items to HomeInventory",
+  "start_url": "/mobile/add-item",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3b82f6",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/homeinventory_logo_cropped.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/homeinventory_logo_cropped.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "lang": "ro-RO",
+  "dir": "ltr"
+}

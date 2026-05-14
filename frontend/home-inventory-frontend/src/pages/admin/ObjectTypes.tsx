@@ -150,8 +150,6 @@ const ObjectTypesPage = () => {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-4">Tipuri de obiecte</h1>
-      
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader className="space-y-3 pb-4">

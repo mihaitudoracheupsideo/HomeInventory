@@ -1,5 +1,6 @@
 using HomeInventory.Domain;
 using HomeInventory.Repository;
+using HomeInventory.Application;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HomeInventory.WebApi.Controllers;
@@ -9,10 +10,12 @@ namespace HomeInventory.WebApi.Controllers;
 public class LocationsController : ControllerBase
 {
     private readonly ILocationRepository _locationRepository;
+    private readonly ITagService _tagService;
 
-    public LocationsController(ILocationRepository locationRepository)
+    public LocationsController(ILocationRepository locationRepository, ITagService tagService)
     {
         _locationRepository = locationRepository;
+        _tagService = tagService;
     }
 
     // GET: api/locations/current/{itemId}
@@ -64,16 +67,23 @@ public class LocationsController : ControllerBase
     public async Task<IActionResult> GetItemsInLocation(Guid locationItemId)
     {
         var items = await _locationRepository.GetItemsInLocationAsync(locationItemId);
-        return Ok(items.Select(i => new
+        var result = await Task.WhenAll(items.Select(async i => new
         {
             i.Id,
             i.Name,
             i.Description,
             i.UniqueCode,
-            i.Tags,
+            Tags = await GetItemTagNamesAsync(i.Id),
             i.ImagePath,
             i.AddedAt
         }));
+        return Ok(result);
+    }
+
+    private async Task<List<string>> GetItemTagNamesAsync(Guid itemId)
+    {
+        var tags = await _tagService.GetItemTagsAsync(itemId);
+        return tags.Select(t => t.Name).ToList();
     }
 
     // POST: api/locations

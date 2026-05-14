@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import type { ChangeEvent, MouseEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { usePageTitle } from "../../contexts/PageTitleContext";
 import {
   createItem,
@@ -11,6 +11,7 @@ import {
   getItemsByLocation,
 } from "../../api/itemService";
 import { uploadImage } from "../../api/imageService";
+import { API_BASE_URL } from "../../api/api";
 import type { IItem } from "../../types/IItem";
 import type { IItemType } from "../../types/IItemType";
 import {
@@ -45,7 +46,8 @@ import {
   Image as ImageIcon,
   Upload,
   AlertCircle,
-  AlertTriangle
+  AlertTriangle,
+  Camera
 } from "lucide-react";
 import LocationHierarchy from "../../components/LocationHierarchy";
 
@@ -67,6 +69,7 @@ const extractCollection = <T,>(payload: unknown): T[] => {
 
 const ObjectsPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const { setTitle } = usePageTitle();
   const [items, setItems] = useState<IItem[]>([]);
@@ -85,12 +88,28 @@ const ObjectsPage = () => {
   const [selectedContainerItem, setSelectedContainerItem] = useState<IItem | null>(null);
 
   const [isAdding, setIsAdding] = useState(false);
+  const [hasProcessedAddParam, setHasProcessedAddParam] = useState(false);
+
+  const cleanupAddParamFromUrl = useCallback(() => {
+    const currentSearchParams = new URLSearchParams(searchParams);
+    currentSearchParams.delete('add');
+    const newSearch = currentSearchParams.toString();
+    const newUrl = newSearch ? `${location.pathname}?${newSearch}` : location.pathname;
+    navigate(newUrl, { replace: true });
+  }, [searchParams, location.pathname, navigate]);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+
+  // Camera-related state
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [isCameraActive, setIsCameraActive] = useState(false);
   const [uploadSize, setUploadSize] = useState<'original' | 'resized'>('original');
 
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [searchInput, setSearchInput] = useState<string>("");
+  const [tempTagsInput, setTempTagsInput] = useState<string>("");
+  const [tagsInputInitialized, setTagsInputInitialized] = useState<boolean>(false);
 
   // Set page title
   useEffect(() => {
@@ -105,7 +124,7 @@ const ObjectsPage = () => {
       editable: true,
       renderCell: (params: GridRenderCellParams<IItem>) => {
         // Count stored items from the item data
-        const storedCount = params.row.storedItemsCount || 0;
+        const storedCount = params.row.childrenCount || 0;
         return (
           <div className="flex items-center gap-2">
             <span className="truncate">{params.row.name}</span>
@@ -147,18 +166,21 @@ const ObjectsPage = () => {
       align: 'center',
       headerAlign: 'center',
       renderCell: (params: GridRenderCellParams<IItem>) => {
-        if (params.row.currentLocationItem) {
+        if (params.row.parent) {
           return (
             <div className="flex items-center justify-center h-full">
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => handleViewLocationHierarchy(params.row)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleViewLocationHierarchy(params.row);
+                }}
                 className="h-auto p-1 text-left justify-start font-normal hover:bg-blue-50 dark:hover:bg-blue-950/20"
-                title={`Vezi ierarhia locației: ${params.row.currentLocationItem.name}`}
+                title={`Vezi ierarhia locației: ${params.row.parent.name}`}
               >
                 <MapPin className="w-4 h-4 mr-2 text-blue-600 dark:text-blue-400 flex-shrink-0" />
-                <span className="truncate">{params.row.currentLocationItem.name}</span>
+                <span className="truncate">{params.row.parent.name}</span>
               </Button>
             </div>
           );
@@ -173,41 +195,31 @@ const ObjectsPage = () => {
       },
     },
     {
-      field: "image",
-      headerName: "Imagine",
-      sortable: false,
-      width: 100,
-      renderCell: (params: GridRenderCellParams<IItem>) => (
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => handleViewImage(params.row)}
-          disabled={!params.row.imagePath}
-          title={params.row.imagePath ? "Vezi imaginea" : "Nicio imagine"}
-        >
-          🖼️
-        </Button>
-      ),
-    },
-    {
       field: "actions",
       headerName: "Actions",
       sortable: false,
-      width: 200,
+      width: 250,
       renderCell: (params: GridRenderCellParams<IItem>) => (
         <Stack direction="row" spacing={1} alignItems="center" sx={{ height: '100%' }}>
           <Button
             size="sm"
             variant="outline"
-            onClick={() => handleViewDetail(params.row)}
-            title="Vezi detalii"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleViewImage(params.row);
+            }}
+            disabled={!params.row.imagePath}
+            title={params.row.imagePath ? "Vezi imaginea" : "Nicio imagine"}
           >
-            👁️
+            🖼️
           </Button>
           <Button
             size="sm"
             variant="outline"
-            onClick={() => void handleSaveEditPopup(params.row, Action.EDIT)}
+            onClick={(e) => {
+              e.stopPropagation();
+              void handleSaveEditPopup(params.row, Action.EDIT);
+            }}
             title="Editează"
           >
             ✏️ 
@@ -215,7 +227,10 @@ const ObjectsPage = () => {
           <Button
             size="sm"
             variant="destructive"
-            onClick={() => handleDeletePopup(params.row)}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleDeletePopup(params.row);
+            }}
             title="Șterge"
           >
             🗑️
@@ -308,6 +323,26 @@ const ObjectsPage = () => {
     }
   }, [searchParams]);
 
+  // Check for add query parameter and trigger add dialog
+  useEffect(() => {
+    const addParam = searchParams.get('add');
+    if (addParam === 'true' && !showEditDialog && itemTypes.length > 0 && !hasProcessedAddParam) {
+      // Small delay to ensure component is fully mounted
+      setTimeout(() => {
+        void handleSaveEditPopup(createEmptyItem(), Action.ADD);
+        setHasProcessedAddParam(true);
+      }, 100);
+    }
+  }, [searchParams, showEditDialog, itemTypes.length, hasProcessedAddParam]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Reset the add parameter processing flag when URL changes
+  useEffect(() => {
+    const addParam = searchParams.get('add');
+    if (addParam !== 'true') {
+      setHasProcessedAddParam(false);
+    }
+  }, [searchParams]);
+
   useEffect(() => {
     // Simulate fetching data from an API
     void loadItems(searchTerm);
@@ -336,12 +371,19 @@ const ObjectsPage = () => {
     setSelectedItem(action === Action.ADD ? createEmptyItem() : object);
     setSelectedFile(null);
     setUploadSize('original');
+    setTempTagsInput(action === Action.ADD ? "" : (object.tags?.join(", ") ?? ""));
+    setTagsInputInitialized(false);
     setShowEditDialog(true);
     setIsAdding(action === Action.ADD);
   };
 
   const handleViewDetail = (item: IItem): void => {
     navigate(`/objects/${item.id}`);
+  };
+
+  const handleDeletePopup = (item: IItem): void => {
+    setSelectedItem(item);
+    setShowDeleteDialog(true);
   };
 
   const handleViewImage = (item: IItem): void => {
@@ -418,7 +460,7 @@ const ObjectsPage = () => {
           itemTypeId: selectedItem.itemTypeId,
           tags: selectedItem.tags,
           imagePath: selectedItem.imagePath,
-          currentLocationItemId: selectedItem.currentLocationItemId,
+          parentItemId: selectedItem.parentItemId,
         };
         await createItem(itemData);
       } else {
@@ -429,7 +471,7 @@ const ObjectsPage = () => {
           itemTypeId: selectedItem.itemTypeId,
           tags: selectedItem.tags || [],
           imagePath: selectedItem.imagePath || null,
-          currentLocationItemId: selectedItem.currentLocationItemId,
+          parentItemId: selectedItem.parentItemId,
         };
         await updateItem(selectedItem.id, updateData);
       }
@@ -437,12 +479,62 @@ const ObjectsPage = () => {
       setSelectedItem(null);
       setSelectedFile(null);
       setSelectedFile(null);
+      setTempTagsInput("");
+      setTagsInputInitialized(false);
+      cleanupAddParamFromUrl();
       await loadItems(searchTerm);
     } catch (err) {
       console.error("Error updating object", err);
       const error = err as { response?: { data?: unknown } };
       console.error("Error details:", error?.response?.data);
       alert(`Error: ${error?.response?.data || 'Unknown error'}`);
+    }
+  };
+
+  // Camera functions
+  const startCamera = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' } // Use back camera on mobile
+      });
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        setIsCameraActive(true);
+      }
+    } catch (error) {
+      console.error('Error accessing camera:', error);
+      alert('Unable to access camera. Please check permissions.');
+    }
+  };
+
+  const stopCamera = () => {
+    if (videoRef.current && videoRef.current.srcObject) {
+      const stream = videoRef.current.srcObject as MediaStream;
+      stream.getTracks().forEach(track => track.stop());
+      videoRef.current.srcObject = null;
+      setIsCameraActive(false);
+    }
+  };
+
+  const capturePhoto = () => {
+    if (videoRef.current && canvasRef.current) {
+      const canvas = canvasRef.current;
+      const video = videoRef.current;
+      const context = canvas.getContext('2d');
+
+      if (context) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        context.drawImage(video, 0, 0);
+
+        canvas.toBlob((blob) => {
+          if (blob) {
+            const file = new File([blob], `photo_${Date.now()}.jpg`, { type: 'image/jpeg' });
+            setSelectedFile(file);
+            stopCamera();
+          }
+        }, 'image/jpeg', 0.8);
+      }
     }
   };
 
@@ -466,8 +558,6 @@ const ObjectsPage = () => {
 
   return (
     <div className="w-full h-full overflow-auto">
-      <h1 className="text-2xl font-bold mb-4">Obiecte</h1>
-
       {/* Search Input */}
       <div className="mb-4 flex gap-2 items-center">
         <Input
@@ -475,6 +565,11 @@ const ObjectsPage = () => {
           placeholder="Caută obiecte... (nume, descriere, tag-uri, tip)"
           value={searchInput}
           onChange={(e: ChangeEvent<HTMLInputElement>) => setSearchInput(e.target.value)}
+          onKeyPress={(e: React.KeyboardEvent<HTMLInputElement>) => {
+            if (e.key === 'Enter') {
+              handleSearch();
+            }
+          }}
           className="max-w-md"
         />
         <Button variant="outline" onClick={handleSearch}>
@@ -607,9 +702,9 @@ const ObjectsPage = () => {
                   <select
                     id="editLocation"
                     className="flex h-11 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    value={selectedItem?.currentLocationItemId ?? ""}
+                    value={selectedItem?.parentItemId ?? ""}
                     onChange={(e) =>
-                      selectedItem && setSelectedItem({ ...selectedItem, currentLocationItemId: e.target.value || undefined })
+                      selectedItem && setSelectedItem({ ...selectedItem, parentItemId: e.target.value || undefined })
                     }
                   >
                     <option value="">
@@ -641,13 +736,30 @@ const ObjectsPage = () => {
                 </Label>
                 <Input
                   id="editTags"
-                  value={selectedItem?.tags?.join(", ") ?? ""}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                    selectedItem && setSelectedItem({
-                      ...selectedItem,
-                      tags: e.target.value.split(/[,\s]+/).map(tag => tag.trim()).filter(tag => tag.length > 0),
-                    })
-                  }
+                  value={tempTagsInput}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                    setTempTagsInput(e.target.value);
+                  }}
+                  onBlur={() => {
+                    // Process tags when input loses focus
+                    const processedTags = tempTagsInput
+                      .split(/[,\s]+/)
+                      .map(tag => tag.trim())
+                      .filter(tag => tag.length > 0);
+                    if (selectedItem) {
+                      setSelectedItem({
+                        ...selectedItem,
+                        tags: processedTags,
+                      });
+                    }
+                  }}
+                  onFocus={() => {
+                    // Set temp input to current tags when focusing (only once per edit session)
+                    if (!tagsInputInitialized) {
+                      setTempTagsInput(selectedItem?.tags?.join(", ") ?? "");
+                      setTagsInputInitialized(true);
+                    }
+                  }}
                   placeholder="ex: electronic birou, important"
                   className="h-11"
                 />
@@ -686,6 +798,59 @@ const ObjectsPage = () => {
                     <Upload className="h-4 w-4 text-muted-foreground" />
                     Încărcare imagine nouă
                   </Label>
+
+                  {/* Camera Controls */}
+                  <div className="flex gap-2 mb-3">
+                    {!isCameraActive ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={startCamera}
+                        className="flex items-center gap-2"
+                      >
+                        <Camera className="h-4 w-4" />
+                        Deschide cameră
+                      </Button>
+                    ) : (
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={capturePhoto}
+                          className="flex items-center gap-2"
+                        >
+                          <Camera className="h-4 w-4" />
+                          Capturează
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={stopCamera}
+                          className="flex items-center gap-2"
+                        >
+                          <X className="h-4 w-4" />
+                          Închide cameră
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Camera Video Element */}
+                  {isCameraActive && (
+                    <div className="mb-3">
+                      <video
+                        ref={videoRef}
+                        autoPlay
+                        playsInline
+                        muted
+                        className="w-full max-w-sm mx-auto border rounded-lg"
+                      />
+                      <canvas ref={canvasRef} className="hidden" />
+                    </div>
+                  )}
 
                   <div className="space-y-3 p-4 border border-dashed border-muted-foreground/25 rounded-lg bg-muted/20">
                     <div className="flex items-center space-x-4">
@@ -823,7 +988,12 @@ const ObjectsPage = () => {
           <DialogFooter className="flex gap-3 pt-6 border-t mt-6">
             <Button
               variant="outline"
-              onClick={() => setShowEditDialog(false)}
+              onClick={() => {
+                setShowEditDialog(false);
+                setTempTagsInput("");
+                setTagsInputInitialized(false);
+                cleanupAddParamFromUrl();
+              }}
               className="flex-1 sm:flex-none"
             >
               <X className="h-4 w-4 mr-2" />
@@ -904,7 +1074,7 @@ const ObjectsPage = () => {
           <div className="flex justify-center">
             {selectedImageItem?.imagePath ? (
               <img
-                src={`http://localhost:5005/api/images/${selectedImageItem.imagePath}?t=${Date.now()}`}
+                src={`${API_BASE_URL}/api/images/${selectedImageItem.imagePath}?t=${Date.now()}`}
                 alt={selectedImageItem.name}
                 className="max-w-full max-h-96 object-contain rounded"
                 onError={(e) => {
@@ -976,23 +1146,6 @@ const ObjectsPage = () => {
                     },
                   }}
                   onRowClick={(params) => handleViewDetail(params.row)}
-                  sx={{
-                    border: 0,
-                    '& .MuiDataGrid-cell': {
-                      borderBottom: '1px solid var(--mui-palette-divider)',
-                    },
-                    '& .MuiDataGrid-columnHeaders': {
-                      backgroundColor: 'var(--mui-palette-background-paper)',
-                      borderBottom: '2px solid var(--mui-palette-divider)',
-                    },
-                    '& .MuiDataGrid-row:hover': {
-                      backgroundColor: 'rgba(59, 130, 246, 0.08)',
-                      cursor: 'pointer',
-                    },
-                    '& .MuiDataGrid-row:hover .MuiDataGrid-cell': {
-                      color: 'rgb(59, 130, 246)',
-                    },
-                  }}
                 />
               </Box>
             ) : (
@@ -1034,7 +1187,16 @@ const ObjectsPage = () => {
           },
         }}
         checkboxSelection // bife pentru selectie
-        disableRowSelectionOnClick
+        onRowClick={(params) => handleViewDetail(params.row)}
+        sx={{
+          '& .MuiDataGrid-row:hover': {
+            backgroundColor: 'rgba(59, 130, 246, 0.08)',
+            cursor: 'pointer',
+          },
+          '& .MuiDataGrid-row:hover .MuiDataGrid-cell': {
+            color: 'rgb(59, 130, 246)',
+          },
+        }}
       />
     </Box>
     </div>

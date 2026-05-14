@@ -2,6 +2,7 @@ import { defineConfig } from 'vite'
 import path from "path"
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
+import fs from 'fs'
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -11,6 +12,14 @@ export default defineConfig({
     }),
     tailwindcss()
   ],
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    https: {
+      key: fs.readFileSync(path.resolve(__dirname, '../../.ssl/localhost+2.key')),
+      cert: fs.readFileSync(path.resolve(__dirname, '../../.ssl/localhost+2.crt'))
+    }
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

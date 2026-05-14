@@ -1,6 +1,6 @@
 using System;
 
-namespace HomeInventory.Domain
+namespace HomeInventory.Domain.Entities
 {
     public class LocationHistory
     {

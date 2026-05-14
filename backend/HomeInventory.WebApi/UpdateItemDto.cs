@@ -22,6 +22,5 @@ public class UpdateItemDto
     [JsonPropertyName("imagePath")]
     public string? ImagePath { get; set; }
 
-    [BindNever]
-    public Guid? CurrentLocationItemId { get; set; }
+    public Guid? ParentItemId { get; set; }
 }

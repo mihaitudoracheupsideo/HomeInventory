@@ -7,6 +7,9 @@ const About = lazy(() => import("../pages/About"));
 const ObjectTypesPage = lazy(() => import('../pages/admin/ObjectTypes'));
 const ObjectsPage = lazy(() => import('../pages/admin/Objects'));
 const ItemDetailPage = lazy(() => import('../pages/admin/ItemDetail'));
+const MobileAddItemPage = lazy(() => import('../pages/mobile/MobileAddItem'));
+const ReportsPage = lazy(() => import('../pages/Reports'));
+const SettingsPage = lazy(() => import('../pages/Settings'));
 
 export const routes: RouteObject[] = [
   { path: "/", element: <Dashboard /> },
@@ -16,4 +19,7 @@ export const routes: RouteObject[] = [
   { path: "/objects", element: <ObjectsPage /> },
   { path: "/objects/:id", element: <ItemDetailPage /> },
   { path: "/item/:uniqueCode", element: <ItemDetailPage /> },
+  { path: "/mobile/add-item", element: <MobileAddItemPage /> },
+  { path: "/reports", element: <ReportsPage /> },
+  { path: "/settings", element: <SettingsPage /> },
 ];

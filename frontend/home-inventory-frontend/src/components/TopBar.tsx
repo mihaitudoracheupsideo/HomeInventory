@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useTheme } from '../contexts/ThemeContext';
 import { usePageTitle } from '../contexts/PageTitleContext';
 import homeInventoryLogo from '../assets/homeinventory_logo_cropped.png';
@@ -11,8 +11,12 @@ interface TopBarProps {
 const TopBar = ({ onSearch }: TopBarProps) => {
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
   const { theme, toggleTheme } = useTheme();
   const { title } = usePageTitle();
+
+  // Hide search and add button on objects list page
+  const isObjectsListPage = location.pathname === '/objects';
 
   // Debounced search
   useEffect(() => {
@@ -64,57 +68,63 @@ const TopBar = ({ onSearch }: TopBarProps) => {
         {/* Left side of right area - Page Title */}
         <div className="flex items-center">
           {title && (
-            <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
               {title}
-            </h1>
+            </h3>
           )}
         </div>
 
         {/* Center - Search */}
-        <div className="flex-1 max-w-md mx-8">
-          <form onSubmit={handleSearchSubmit} className="relative">
-            <input
-              type="text"
-              placeholder="Search items, boxes, locations..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="global-search-input w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-sm"
-            />
-            <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-              </svg>
-            </div>
-            {/* Keyboard shortcut hint */}
-            <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400 bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded">
-              ⌘K
-            </div>
-          </form>
-        </div>
+        {!isObjectsListPage && (
+          <div className="flex-1 max-w-md mx-8">
+            <form onSubmit={handleSearchSubmit} className="relative">
+              <input
+                type="text"
+                placeholder="Search items, boxes, locations..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="global-search-input w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent transition-all duration-200 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 text-sm"
+              />
+              <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400">
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+              </div>
+              {/* Keyboard shortcut hint */}
+              <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-xs text-gray-400 bg-gray-100 dark:bg-gray-600 px-2 py-1 rounded">
+                ⌘K
+              </div>
+            </form>
+          </div>
+        )}
 
         {/* Right side - Controls */}
         <div className="flex items-center gap-3">
           {/* Quick Add Button */}
-          <button
-            onClick={() => navigate('/objects/new')}
-            className="hidden sm:flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors duration-200 shadow-sm hover:shadow-md"
-          >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-            <span className="font-medium">Add Item</span>
-          </button>
+          {!isObjectsListPage && (
+            <>
+              <button
+                onClick={() => navigate('/objects?add=true', { replace: true })}
+                className="hidden sm:flex items-center gap-2 px-4 py-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors duration-200 shadow-sm hover:shadow-md"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <span className="font-medium">Adaugă obiect</span>
+              </button>
 
-          {/* Mobile Add Button */}
-          <button
-            onClick={() => navigate('/objects/new')}
-            className="sm:hidden p-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors duration-200"
-            aria-label="Add item"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
+              {/* Mobile Add Button */}
+              <button
+                onClick={() => navigate('/objects?add=true', { replace: true })}
+                className="sm:hidden p-2 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition-colors duration-200"
+                aria-label="Adaugă obiect"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
+            </>
+          )}
 
           {/* Dark Mode Toggle */}
           <button

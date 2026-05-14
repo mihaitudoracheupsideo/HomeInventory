@@ -1,6 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
-namespace HomeInventory.Domain;
+namespace HomeInventory.Domain.Entities;
 
 public class Item
 {
@@ -19,21 +19,28 @@ public class Item
     [StringLength(8, MinimumLength = 8)]
     public string UniqueCode { get; set; } = "";
 
-    public List<string> Tags { get; set; } = new List<string>();
-
     [StringLength(500)]
     public string ImagePath { get; set; }
 
-    // Location tracking
-    public Guid? CurrentLocationItemId { get; set; }
-    public virtual Item CurrentLocationItem { get; set; }
+    // Navigation properties for tags
+    public virtual ICollection<ItemTag> ItemTags { get; set; } = new List<ItemTag>();
+
+    // Hierarchy fields
+    public Guid? ParentItemId { get; set; }
+    public virtual Item Parent { get; set; }
+
+    public int NodeIndex { get; set; }
+    [StringLength(500)]
+    public string Path { get; set; }
+    public int Depth { get; set; }
 
     // Audit fields
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     // Navigation properties for location history
     public virtual ICollection<LocationHistory> LocationHistory { get; set; } = new List<LocationHistory>();
 
-    // Navigation properties for items stored in this item
-    public virtual ICollection<Item> StoredItems { get; set; } = new List<Item>();
+    // Navigation properties for child items
+    public virtual ICollection<Item> Children { get; set; } = new List<Item>();
 }

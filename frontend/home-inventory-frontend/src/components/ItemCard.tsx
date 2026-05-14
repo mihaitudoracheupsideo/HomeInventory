@@ -1,5 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import type { IItem } from '../types/IItem';
+import { API_BASE_URL } from '../api/api';
 
 interface ItemCardProps {
   item: IItem;
@@ -22,7 +23,7 @@ const ItemCard = ({ item, className = '' }: ItemCardProps) => {
       <div className="aspect-square bg-gray-100 rounded-xl mb-4 overflow-hidden group-hover:scale-105 transition-transform duration-200">
         {item.imagePath ? (
           <img
-            src={`http://localhost:5005/api/images/${item.imagePath}?t=${Date.now()}`}
+            src={`${API_BASE_URL}/api/images/${item.imagePath}?t=${Date.now()}`}
             alt={item.name}
             className="w-full h-full object-cover"
             onError={(e) => {
@@ -78,8 +79,8 @@ const ItemCard = ({ item, className = '' }: ItemCardProps) => {
         <div className="flex items-center text-xs text-gray-500">
           <span className="mr-1">📍</span>
           <span className="truncate">
-            {item.currentLocationItem
-              ? `${item.currentLocationItem.name} (${item.currentLocationItem.uniqueCode})`
+            {item.parent
+              ? `${item.parent.name} (${item.parent.uniqueCode})`
               : 'No location assigned'
             }
           </span>

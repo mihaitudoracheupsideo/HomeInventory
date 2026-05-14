@@ -6,14 +6,16 @@ export interface IItem {
   description: string;
   itemTypeId: string;
   itemType?: IItemType;
-  parentId?: string;
+  parentItemId?: string;
   parent?: IItem;
   children?: IItem[];
   uniqueCode?: string;
   tags: string[];
   imagePath?: string;
-  currentLocationItemId?: string;
-  currentLocationItem?: IItem;
+  nodeIndex?: number;
+  path?: string;
+  depth?: number;
   addedAt?: string;
-  storedItemsCount?: number;
+  updatedAt?: string;
+  childrenCount?: number;
 }
