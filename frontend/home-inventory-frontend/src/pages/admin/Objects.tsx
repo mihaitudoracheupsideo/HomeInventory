@@ -10,9 +10,15 @@ import {
   getItem,
   getItemsByLocation,
 } from "../../api/itemService";
+import {
+  assignTagsToItem,
+  getItemTags,
+  removeTagFromItem,
+} from "../../api/tagService";
 import { uploadImage } from "../../api/imageService";
 import { API_BASE_URL } from "../../api/api";
 import type { IItem } from "../../types/IItem";
+import type { ITag } from "../../types/ITag";
 import type { IItemType } from "../../types/IItemType";
 import {
   Dialog,
@@ -50,6 +56,7 @@ import {
   Camera
 } from "lucide-react";
 import LocationHierarchy from "../../components/LocationHierarchy";
+import TagInput from "../../components/TagInput";
 
 const extractCollection = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) {
@@ -108,8 +115,6 @@ const ObjectsPage = () => {
 
   const [searchTerm, setSearchTerm] = useState<string>("");
   const [searchInput, setSearchInput] = useState<string>("");
-  const [tempTagsInput, setTempTagsInput] = useState<string>("");
-  const [tagsInputInitialized, setTagsInputInitialized] = useState<boolean>(false);
 
   // Set page title
   useEffect(() => {
@@ -371,8 +376,6 @@ const ObjectsPage = () => {
     setSelectedItem(action === Action.ADD ? createEmptyItem() : object);
     setSelectedFile(null);
     setUploadSize('original');
-    setTempTagsInput(action === Action.ADD ? "" : (object.tags?.join(", ") ?? ""));
-    setTagsInputInitialized(false);
     setShowEditDialog(true);
     setIsAdding(action === Action.ADD);
   };
@@ -464,23 +467,40 @@ const ObjectsPage = () => {
         };
         await createItem(itemData);
       } else {
+        const currentItemTagsResponse = await getItemTags(selectedItem.id);
+        const currentItemTags = currentItemTagsResponse.data ?? [];
+        const nextTagNames = selectedItem.tags ?? [];
+        const currentTagNames = currentItemTags.map((tag: ITag) => tag.name);
+
+        const tagsToAdd = nextTagNames.filter(
+          (tagName) => !currentTagNames.some((existingTagName) => existingTagName.toLocaleUpperCase() === tagName.toLocaleUpperCase())
+        );
+        const tagsToRemove = currentItemTags.filter(
+          (tag: ITag) => !nextTagNames.some((tagName) => tagName.toLocaleUpperCase() === tag.name.toLocaleUpperCase())
+        );
+
         // update item - only send the fields that can be updated
         const updateData = {
           name: selectedItem.name,
           description: selectedItem.description || null,
           itemTypeId: selectedItem.itemTypeId,
-          tags: selectedItem.tags || [],
           imagePath: selectedItem.imagePath || null,
           parentItemId: selectedItem.parentItemId,
         };
         await updateItem(selectedItem.id, updateData);
+
+        if (tagsToAdd.length > 0) {
+          await assignTagsToItem(selectedItem.id, tagsToAdd);
+        }
+
+        await Promise.all(
+          tagsToRemove.map((tag: ITag) => removeTagFromItem(selectedItem.id, tag.id))
+        );
       }
       setShowEditDialog(false);
       setSelectedItem(null);
       setSelectedFile(null);
       setSelectedFile(null);
-      setTempTagsInput("");
-      setTagsInputInitialized(false);
       cleanupAddParamFromUrl();
       await loadItems(searchTerm);
     } catch (err) {
@@ -732,36 +752,23 @@ const ObjectsPage = () => {
               <div className="space-y-2">
                 <Label htmlFor="editTags" className="flex items-center gap-2 text-sm font-medium">
                   <Tag className="h-4 w-4 text-muted-foreground" />
-                  Etichete (separate prin virgulă sau spațiu)
+                  Etichete
                 </Label>
-                <Input
-                  id="editTags"
-                  value={tempTagsInput}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                    setTempTagsInput(e.target.value);
-                  }}
-                  onBlur={() => {
-                    // Process tags when input loses focus
-                    const processedTags = tempTagsInput
-                      .split(/[,\s]+/)
-                      .map(tag => tag.trim())
-                      .filter(tag => tag.length > 0);
-                    if (selectedItem) {
-                      setSelectedItem({
-                        ...selectedItem,
-                        tags: processedTags,
-                      });
+                <TagInput
+                  value={selectedItem?.tags ?? []}
+                  label=""
+                  placeholder="Caută sau adaugă etichete"
+                  helperText="Poți selecta etichete existente sau poți crea unele noi direct din listă."
+                  onChange={(nextTags) => {
+                    if (!selectedItem) {
+                      return;
                     }
+
+                    setSelectedItem({
+                      ...selectedItem,
+                      tags: nextTags,
+                    });
                   }}
-                  onFocus={() => {
-                    // Set temp input to current tags when focusing (only once per edit session)
-                    if (!tagsInputInitialized) {
-                      setTempTagsInput(selectedItem?.tags?.join(", ") ?? "");
-                      setTagsInputInitialized(true);
-                    }
-                  }}
-                  placeholder="ex: electronic birou, important"
-                  className="h-11"
                 />
               </div>
             </div>
@@ -990,8 +997,6 @@ const ObjectsPage = () => {
               variant="outline"
               onClick={() => {
                 setShowEditDialog(false);
-                setTempTagsInput("");
-                setTagsInputInitialized(false);
                 cleanupAddParamFromUrl();
               }}
               className="flex-1 sm:flex-none"

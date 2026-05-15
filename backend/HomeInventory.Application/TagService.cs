@@ -10,6 +10,8 @@ public interface ITagService
     Task<Tag?> GetTagByIdAsync(Guid id);
     Task<Tag?> GetTagByNormalizedNameAsync(string normalizedName);
     Task<IEnumerable<Tag>> SearchTagsAsync(string query, int maxResults = 10);
+    Task<IEnumerable<TagUsageResult>> GetAllTagsWithUsageAsync();
+    Task<IEnumerable<TagUsageResult>> SearchTagsWithUsageAsync(string query, int maxResults = 10);
     Task<Tag> UpdateTagAsync(Guid id, UpdateTagDto dto);
     Task<bool> DeleteTagAsync(Guid id);
     Task AssignTagsToItemAsync(Guid itemId, IEnumerable<string> tagNames);
@@ -76,6 +78,16 @@ public class TagService : ITagService
         return await _tagRepository.SearchAsync(query, maxResults);
     }
 
+    public async Task<IEnumerable<TagUsageResult>> GetAllTagsWithUsageAsync()
+    {
+        return await _tagRepository.GetAllWithUsageAsync();
+    }
+
+    public async Task<IEnumerable<TagUsageResult>> SearchTagsWithUsageAsync(string query, int maxResults = 10)
+    {
+        return await _tagRepository.SearchWithUsageAsync(query, maxResults);
+    }
+
     public async Task<Tag> UpdateTagAsync(Guid id, UpdateTagDto dto)
     {
         var tag = await _tagRepository.GetByIdAsync(id);
@@ -109,6 +121,12 @@ public class TagService : ITagService
         if (tag == null)
         {
             return false;
+        }
+
+        var usageCount = await _tagRepository.GetUsageCountAsync(id);
+        if (usageCount > 0)
+        {
+            throw new InvalidOperationException("Tag cannot be deleted because it is assigned to one or more items.");
         }
 
         await _tagRepository.DeleteAsync(tag);

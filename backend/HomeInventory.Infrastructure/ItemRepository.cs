@@ -43,6 +43,80 @@ public class ItemRepository : Repository<Item>, IItemRepository
         return await query.ToListAsync();
     }
 
+    public async Task<IEnumerable<Item>> AdvancedSearchAsync(
+        string? query = null,
+        Guid? parentItemId = null,
+        Guid? itemTypeId = null,
+        IEnumerable<string>? tags = null,
+        bool requireAllTags = true,
+        bool rootOnly = false,
+        bool withImageOnly = false)
+    {
+        var itemQuery = _context.Item
+            .Include(i => i.ItemType)
+            .Include(i => i.Parent)
+            .ThenInclude(parent => parent.Parent)
+            .Include(i => i.ItemTags)
+                .ThenInclude(it => it.Tag)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            itemQuery = itemQuery.Where(i =>
+                EF.Functions.Like(i.Name, $"%{query}%") ||
+                (!string.IsNullOrEmpty(i.Description) && EF.Functions.Like(i.Description, $"%{query}%")) ||
+                (!string.IsNullOrEmpty(i.UniqueCode) && EF.Functions.Like(i.UniqueCode, $"%{query}%")) ||
+                (i.ItemType != null && EF.Functions.Like(i.ItemType.Name, $"%{query}%"))
+            );
+        }
+
+        if (parentItemId.HasValue)
+        {
+            itemQuery = itemQuery.Where(i => i.ParentItemId == parentItemId.Value);
+        }
+
+        if (itemTypeId.HasValue)
+        {
+            itemQuery = itemQuery.Where(i => i.ItemTypeId == itemTypeId.Value);
+        }
+
+        if (rootOnly)
+        {
+            itemQuery = itemQuery.Where(i => i.ParentItemId == null);
+        }
+
+        if (withImageOnly)
+        {
+            itemQuery = itemQuery.Where(i => !string.IsNullOrEmpty(i.ImagePath));
+        }
+
+        var normalizedTags = tags?
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(tag => tag.Trim().ToLowerInvariant())
+            .Distinct()
+            .ToArray() ?? Array.Empty<string>();
+
+        if (normalizedTags.Length > 0)
+        {
+            if (requireAllTags)
+            {
+                foreach (var tag in normalizedTags)
+                {
+                    var currentTag = tag;
+                    itemQuery = itemQuery.Where(i =>
+                        i.ItemTags.Any(it => it.Tag.Name.ToLower() == currentTag));
+                }
+            }
+            else
+            {
+                itemQuery = itemQuery.Where(i =>
+                    i.ItemTags.Any(it => normalizedTags.Contains(it.Tag.Name.ToLower())));
+            }
+        }
+
+        return await itemQuery.ToListAsync();
+    }
+
     public async Task<Item?> GetItemWithTypeAsync(Guid id)
     {
         var item = await _context.Item

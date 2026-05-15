@@ -41,3 +41,15 @@ public class TagDto
     public string? Color { get; set; }
     public string? Icon { get; set; }
 }
+
+public class TagUsageResult
+{
+    public Tag Tag { get; set; } = null!;
+    public int UsageCount { get; set; }
+}
+
+public class TagListItemDto : TagDto
+{
+    public int UsageCount { get; set; }
+    public bool CanDelete { get; set; }
+}

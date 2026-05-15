@@ -227,7 +227,7 @@ namespace HomeInventory.Infrastructure.Migrations
                     b.HasOne("HomeInventory.Domain.Entities.Tag", "Tag")
                         .WithMany("ItemTags")
                         .HasForeignKey("TagId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("Item");

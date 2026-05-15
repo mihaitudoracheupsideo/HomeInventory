@@ -1,9 +1,89 @@
 import { api } from "./api";
 
-export const getItems = (search?: string) => {
+export interface GetItemsOptions {
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface AdvancedSearchItemsOptions {
+  query?: string;
+  tags?: string[];
+  parentItemId?: string;
+  itemTypeId?: string;
+  tagMatchMode?: 'all' | 'any';
+  rootOnly?: boolean;
+  withImageOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export const getItems = (searchOrOptions?: string | GetItemsOptions) => {
   const params = new URLSearchParams();
-  if (search) params.append('search', search);
+
+  if (typeof searchOrOptions === 'string') {
+    if (searchOrOptions) {
+      params.append('search', searchOrOptions);
+    }
+  } else if (searchOrOptions) {
+    if (searchOrOptions.search) {
+      params.append('search', searchOrOptions.search);
+    }
+
+    if (typeof searchOrOptions.page === 'number') {
+      params.append('page', String(searchOrOptions.page));
+    }
+
+    if (typeof searchOrOptions.pageSize === 'number') {
+      params.append('pageSize', String(searchOrOptions.pageSize));
+    }
+  }
+
   return api.get(`/items?${params.toString()}`);
+};
+
+export const advancedSearchItems = (options: AdvancedSearchItemsOptions) => {
+  const params = new URLSearchParams();
+
+  if (options.query) {
+    params.append('query', options.query);
+  }
+
+  options.tags?.forEach((tag) => {
+    if (tag) {
+      params.append('tag', tag);
+    }
+  });
+
+  if (options.parentItemId) {
+    params.append('parentItemId', options.parentItemId);
+  }
+
+  if (options.itemTypeId) {
+    params.append('itemTypeId', options.itemTypeId);
+  }
+
+  if (options.tagMatchMode) {
+    params.append('tagMatchMode', options.tagMatchMode);
+  }
+
+  if (options.rootOnly) {
+    params.append('rootOnly', 'true');
+  }
+
+  if (options.withImageOnly) {
+    params.append('withImageOnly', 'true');
+  }
+
+  if (typeof options.page === 'number') {
+    params.append('page', String(options.page));
+  }
+
+  if (typeof options.pageSize === 'number') {
+    params.append('pageSize', String(options.pageSize));
+  }
+
+  return api.get(`/items/advanced-search?${params.toString()}`);
 };
 export const getItemsByLocation = (locationId: string) => api.get(`/locations/items/${locationId}`);
 export const getItem = (id: unknown) => api.get(`/items/${id}`);

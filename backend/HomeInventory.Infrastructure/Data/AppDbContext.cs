@@ -54,7 +54,7 @@ public class AppDbContext : DbContext
             .HasOne(it => it.Tag)
             .WithMany(t => t.ItemTags)
             .HasForeignKey(it => it.TagId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.Restrict);
 
         // Indexes for performance
         modelBuilder.Entity<Item>()

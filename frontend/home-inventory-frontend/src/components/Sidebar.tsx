@@ -16,6 +16,7 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
     { id: 'dashboard', label: 'Dashboard', title: 'Dashboard', icon: '📊', path: '/' },
     { id: 'items', label: 'Obiecte', title: 'Obiecte', icon: '📦', path: '/objects' },
     { id: 'itemTypes', label: 'Tipuri obiecte', title: 'Tipuri obiecte', icon: '📦', path: '/object-types' },
+    { id: 'tree', label: 'Tree', title: 'Arbore obiecte', icon: '🌳', path: '/tree' },
     { id: 'search', label: 'Search', title: 'Căutare', icon: '🔍', path: '/search' },
     { id: 'settings', label: 'Settings', title: 'Setări', icon: '⚙️', path: '/settings' },
   ], []);

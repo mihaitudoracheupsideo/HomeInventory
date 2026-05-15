@@ -8,8 +8,14 @@ import {
   getItemByUniqueCode,
   getItems,
 } from "../../api/itemService";
+import {
+  assignTagsToItem,
+  getItemTags,
+  removeTagFromItem,
+} from "../../api/tagService";
 import { API_BASE_URL } from "../../api/api";
 import type { IItem } from "../../types/IItem";
+import type { ITag } from "../../types/ITag";
 import { Input, Textarea } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import QRCodeDisplay from "../../components/QRCodeDisplay";
@@ -17,6 +23,7 @@ import ImagePreviewModal from "../../components/ImagePreviewModal";
 import LocationPopup from "../../components/LocationPopup";
 import LocationHistory from "../../components/LocationHistory";
 import LocationHierarchy from "../../components/LocationHierarchy";
+import TagInput from "../../components/TagInput";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "../../components/ui/dialog";
 import { Label } from "../../components/ui/label";
 import {
@@ -62,13 +69,7 @@ const ItemDetailPage = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [storedItems, setStoredItems] = useState<IItem[]>([]);
-
-  // Edit states
-  const [editingTags, setEditingTags] = useState(false);
-
-  // Tags input states
-  const [tempTagsInput, setTempTagsInput] = useState<string>("");
-  const [tagsInputInitialized, setTagsInputInitialized] = useState<boolean>(false);
+  const [itemTags, setItemTags] = useState<ITag[]>([]);
 
   // Modals
   const [showImageModal, setShowImageModal] = useState(false);
@@ -91,7 +92,15 @@ const ItemDetailPage = () => {
 
     try {
       const res = id ? await getItem(itemId) : await getItemByUniqueCode(uniqueCode!);
-      setItem(res.data);
+      const loadedItem = res.data as IItem;
+      setItem(loadedItem);
+
+      if (loadedItem.id) {
+        const tagsResponse = await getItemTags(loadedItem.id);
+        const loadedTags = tagsResponse.data ?? [];
+        setItemTags(loadedTags);
+        setItem((currentItem) => currentItem ? { ...currentItem, tags: loadedTags.map((tag) => tag.name) } : currentItem);
+      }
     } catch (err) {
       console.error("Error fetching item", err);
     } finally {
@@ -200,12 +209,41 @@ const ItemDetailPage = () => {
 
     setSaving(true);
     try {
-      await updateItem(item.id, item);
+      const tagIdsByName = new Map(itemTags.map((tag) => [tag.name.toLocaleUpperCase(), tag.id]));
+      const nextTagNames = item.tags ?? [];
+      const currentTagNames = itemTags.map((tag) => tag.name);
+
+      const tagsToAdd = nextTagNames.filter(
+        (tagName) => !currentTagNames.some((existingTagName) => existingTagName.toLocaleUpperCase() === tagName.toLocaleUpperCase())
+      );
+      const tagsToRemove = itemTags.filter(
+        (tag) => !nextTagNames.some((tagName) => tagName.toLocaleUpperCase() === tag.name.toLocaleUpperCase())
+      );
+
+      await updateItem(item.id, {
+        id: item.id,
+        name: item.name,
+        description: item.description,
+        itemTypeId: item.itemTypeId,
+        uniqueCode: item.uniqueCode,
+        imagePath: item.imagePath,
+        parentItemId: item.parentItemId,
+      });
+
+      if (tagsToAdd.length > 0) {
+        await assignTagsToItem(item.id, tagsToAdd);
+      }
+
+      await Promise.all(
+        tagsToRemove.map((tag) => removeTagFromItem(item.id, tag.id ?? tagIdsByName.get(tag.name.toLocaleUpperCase()) ?? ''))
+      );
+
+      const refreshedTagsResponse = await getItemTags(item.id);
+      const refreshedTags = refreshedTagsResponse.data ?? [];
+      setItemTags(refreshedTags);
+      setItem((currentItem) => currentItem ? { ...currentItem, tags: refreshedTags.map((tag) => tag.name) } : currentItem);
+
       toast.success("Obiectul a fost salvat cu succes!");
-      // Reset all editing states
-      setEditingTags(false);
-      setTempTagsInput("");
-      setTagsInputInitialized(false);
       navigate("/objects");
     } catch (err: unknown) {
       console.error("Error updating item", err);
@@ -227,12 +265,6 @@ const ItemDetailPage = () => {
   const handleLocationChanged = () => {
     // Reload item data to reflect location changes
     void loadItem();
-  };
-
-  const handleNavigateToLocation = () => {
-    if (item?.parent) {
-      navigate(`/objects/${item.parent.id}`);
-    }
   };
 
   if (loading) {
@@ -423,26 +455,6 @@ const ItemDetailPage = () => {
                 >
                   📋
                 </Button>
-                {item.parent && (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={handleNavigateToLocation}
-                    title="Mergi la locație"
-                    className="p-2"
-                  >
-                    ➡️
-                  </Button>
-                )}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => setShowHierarchyPopup(true)}
-                  title="Arată ierarhia locațiilor"
-                  className="p-2"
-                >
-                  📊
-                </Button>
               </div>
             </div>
 
@@ -462,45 +474,21 @@ const ItemDetailPage = () => {
             <div className="space-y-2">
               <Label htmlFor="itemTags" className="flex items-center gap-2 text-sm font-medium">
                 <Tag className="h-4 w-4 text-muted-foreground" />
-                Etichete (separate prin virgulă sau spațiu)
+                Etichete
               </Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  id="itemTags"
-                  value={editingTags ? tempTagsInput : (item?.tags?.join(", ") || "")}
-                  onChange={(e: ChangeEvent<HTMLInputElement>) => {
-                    if (editingTags) {
-                      setTempTagsInput(e.target.value);
-                    } else {
-                      setItem({
-                        ...item,
-                        tags: e.target.value.split(/[,\s]+/).map(tag => tag.trim()).filter(tag => tag.length > 0)
-                      });
-                    }
-                  }}
-                  onBlur={() => {
-                    if (editingTags) {
-                      // Process tags when input loses focus
-                      const processedTags = tempTagsInput
-                        .split(/[,\s]+/)
-                        .map(tag => tag.trim())
-                        .filter(tag => tag.length > 0);
-                      setItem({
-                        ...item,
-                        tags: processedTags,
-                      });
-                    }
-                  }}
-                  onFocus={() => {
-                    if (editingTags && !tagsInputInitialized) {
-                      // Set temp input to current tags when focusing (only once per edit session)
-                      setTempTagsInput(item?.tags?.join(", ") ?? "");
-                      setTagsInputInitialized(true);
-                    }
-                  }}
-                  className="flex-1 h-11"
-                />
-              </div>
+              <TagInput
+                value={item.tags ?? []}
+                label="Etichete"
+                placeholder="Alege un tag existent sau creează unul nou"
+                helperText="Tag-urile se salvează împreună cu modificările obiectului."
+                disabled={saving}
+                onChange={(nextTags) => {
+                  setItem({
+                    ...item,
+                    tags: nextTags,
+                  });
+                }}
+              />
             </div>
           </div>
 

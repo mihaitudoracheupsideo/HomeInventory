@@ -10,6 +10,20 @@ public class TagRepository : Repository<Tag>, ITagRepository
     {
     }
 
+    private IQueryable<TagUsageResult> BuildTagUsageQuery()
+    {
+        return _context.Tags
+            .GroupJoin(
+                _context.ItemTags,
+                tag => tag.Id,
+                itemTag => itemTag.TagId,
+                (tag, itemTags) => new TagUsageResult
+                {
+                    Tag = tag,
+                    UsageCount = itemTags.Count()
+                });
+    }
+
     public async Task<Tag?> GetByNormalizedNameAsync(string normalizedName)
     {
         return await _context.Tags
@@ -24,6 +38,29 @@ public class TagRepository : Repository<Tag>, ITagRepository
             .OrderBy(t => t.Name)
             .Take(maxResults)
             .ToListAsync();
+    }
+
+    public async Task<IEnumerable<TagUsageResult>> GetAllWithUsageAsync()
+    {
+        return await BuildTagUsageQuery()
+            .OrderBy(result => result.Tag.Name)
+            .ToListAsync();
+    }
+
+    public async Task<IEnumerable<TagUsageResult>> SearchWithUsageAsync(string query, int maxResults = 10)
+    {
+        var normalizedQuery = query.ToUpperInvariant().Trim();
+        return await BuildTagUsageQuery()
+            .Where(result => string.IsNullOrEmpty(normalizedQuery) ||
+                result.Tag.NormalizedName.Contains(normalizedQuery))
+            .OrderBy(result => result.Tag.Name)
+            .Take(maxResults)
+            .ToListAsync();
+    }
+
+    public async Task<int> GetUsageCountAsync(Guid tagId)
+    {
+        return await _context.ItemTags.CountAsync(itemTag => itemTag.TagId == tagId);
     }
 
     public async Task<bool> ExistsByNormalizedNameAsync(string normalizedName)

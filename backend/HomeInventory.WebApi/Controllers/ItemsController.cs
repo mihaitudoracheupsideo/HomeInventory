@@ -28,38 +28,17 @@ public class ItemsController : ControllerBase
     [HttpGet]
     public async Task<IActionResult> GetItems(int page = 1, int pageSize = 10, string? search = null)
     {
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 1000);
+
         // Don't cache search results since they are dynamic
         if (!string.IsNullOrEmpty(search))
         {
             var searchItems = await _itemRepository.GetItemsWithDependenciesAsync(search);
-            var searchPaginated = searchItems.Skip((page - 1) * pageSize).Take(pageSize);
-            var searchResult = await Task.WhenAll(searchItems.Select(async item => new
-            {
-                item.Id,
-                item.Name,
-                item.Description,
-                item.UniqueCode,
-                Tags = await GetItemTagNamesAsync(item.Id),
-                item.ImagePath,
-                item.AddedAt,
-                ItemTypeId = item.ItemTypeId,
-                ItemType = item.ItemType != null ? new
-                {
-                    item.ItemType.Id,
-                    item.ItemType.Name,
-                    item.ItemType.Description
-                } : null,
-                ParentItemId = item.ParentItemId,
-                parent = item.Parent != null ? new
-                {
-                    item.Parent.Id,
-                    item.Parent.Name,
-                    item.Parent.Description,
-                    item.Parent.UniqueCode
-                } : null,
-                ChildrenCount = await _itemRepository.GetChildrenCountAsync(item.Id)
-            }));
-            return Ok(new PaginatedResponse<object> { Data = searchResult, TotalCount = searchItems.Count() });
+            var searchItemsList = searchItems.ToList();
+            var searchPaginated = searchItemsList.Skip((page - 1) * pageSize).Take(pageSize);
+            var searchResult = await ProjectItemsAsync(searchPaginated);
+            return Ok(new PaginatedResponse<object> { Data = searchResult, TotalCount = searchItemsList.Count });
         }
         
         // Cache only non-search results
@@ -67,37 +46,48 @@ public class ItemsController : ControllerBase
         if (!_cache.TryGetValue(cacheKey, out IEnumerable<object>? items))
         {
             var allItems = await _itemRepository.GetItemsWithDependenciesAsync(null);
-            var itemsWithLocation = await Task.WhenAll(allItems.Select(async item => new
-            {
-                item.Id,
-                item.Name,
-                item.Description,
-                item.UniqueCode,
-                Tags = await GetItemTagNamesAsync(item.Id),
-                item.ImagePath,
-                item.AddedAt,
-                ItemTypeId = item.ItemTypeId,
-                ItemType = item.ItemType != null ? new
-                {
-                    item.ItemType.Id,
-                    item.ItemType.Name,
-                    item.ItemType.Description
-                } : null,
-                ParentItemId = item.ParentItemId,
-                parent = item.Parent != null ? new
-                {
-                    item.Parent.Id,
-                    item.Parent.Name,
-                    item.Parent.Description,
-                    item.Parent.UniqueCode
-                } : null,
-                ChildrenCount = await _itemRepository.GetChildrenCountAsync(item.Id)
-            }));
+            var itemsWithLocation = await ProjectItemsAsync(allItems);
             _cache.Set(cacheKey, itemsWithLocation, TimeSpan.FromMinutes(5));
             items = itemsWithLocation;
         }
         var paginated = items!.Skip((page - 1) * pageSize).Take(pageSize);
         return Ok(new PaginatedResponse<object> { Data = paginated, TotalCount = items!.Count() });
+    }
+
+    [HttpGet("advanced-search")]
+    public async Task<IActionResult> AdvancedSearch(
+        [FromQuery] string? query = null,
+        [FromQuery] Guid? parentItemId = null,
+        [FromQuery] Guid? itemTypeId = null,
+        [FromQuery(Name = "tag")] string[]? tags = null,
+        [FromQuery] string tagMatchMode = "all",
+        [FromQuery] bool rootOnly = false,
+        [FromQuery] bool withImageOnly = false,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 25)
+    {
+        page = Math.Max(page, 1);
+        pageSize = Math.Clamp(pageSize, 1, 1000);
+
+        var requireAllTags = !string.Equals(tagMatchMode, "any", StringComparison.OrdinalIgnoreCase);
+        var matchedItems = await _itemRepository.AdvancedSearchAsync(
+            query,
+            parentItemId,
+            itemTypeId,
+            tags,
+            requireAllTags,
+            rootOnly,
+            withImageOnly);
+
+        var matchedItemsList = matchedItems.ToList();
+        var paginatedItems = matchedItemsList.Skip((page - 1) * pageSize).Take(pageSize);
+        var projectedItems = await ProjectItemsAsync(paginatedItems);
+
+        return Ok(new PaginatedResponse<object>
+        {
+            Data = projectedItems,
+            TotalCount = matchedItemsList.Count
+        });
     }
 
     [HttpGet("{id}")]
@@ -321,10 +311,19 @@ public class ItemsController : ControllerBase
         {
             await _tagService.AssignTagsToItemAsync(item.Id, createItemDto.Tags);
         }
+
+        var createdItem = await _itemRepository.GetItemWithTypeAsync(item.Id);
+        if (createdItem == null)
+        {
+            return StatusCode(StatusCodes.Status500InternalServerError, "Created item could not be reloaded.");
+        }
         
         // Clear all item-related cache entries
         ClearItemCache();
-        return CreatedAtAction(nameof(GetById), new { id = item.Id }, item);
+        return CreatedAtAction(
+            nameof(GetById),
+            new { id = createdItem.Id },
+            await ProjectItemAsync(createdItem));
     }
 
     // PUT: api/Items/{id}
@@ -449,6 +448,35 @@ public class ItemsController : ControllerBase
     {
         var tags = await _tagService.GetItemTagsAsync(itemId);
         return tags.Select(t => t.Name).ToList();
+    }
+
+    private async Task<object[]> ProjectItemsAsync(IEnumerable<Item> items)
+    {
+        return await Task.WhenAll(items.Select(ProjectItemAsync));
+    }
+
+    private async Task<object> ProjectItemAsync(Item item)
+    {
+        return new
+        {
+            item.Id,
+            item.Name,
+            item.Description,
+            item.UniqueCode,
+            Tags = await GetItemTagNamesAsync(item.Id),
+            item.ImagePath,
+            item.AddedAt,
+            ItemTypeId = item.ItemTypeId,
+            ItemType = item.ItemType != null ? new
+            {
+                item.ItemType.Id,
+                item.ItemType.Name,
+                item.ItemType.Description
+            } : null,
+            ParentItemId = item.ParentItemId,
+            parent = BuildLocationItem(item.Parent),
+            ChildrenCount = await _itemRepository.GetChildrenCountAsync(item.Id)
+        };
     }
 
     private object? BuildLocationItem(Item? item)
