@@ -11,6 +11,7 @@ public class AppDbContext : DbContext
 
     public DbSet<Item> Item { get; set; }
     public DbSet<ItemType> ItemType { get; set; }
+    public DbSet<Location> Location { get; set; }
     public DbSet<LocationHistory> LocationHistory { get; set; }
     public DbSet<Tag> Tags { get; set; }
     public DbSet<ItemTag> ItemTags { get; set; }
@@ -25,6 +26,9 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<ItemType>()
             .HasKey(ot => ot.Id);
+
+        modelBuilder.Entity<Location>()
+            .HasKey(l => l.Id);
 
         modelBuilder.Entity<LocationHistory>()
             .HasKey(lh => lh.Id);
@@ -82,6 +86,32 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<Item>()
             .HasIndex(i => i.NodeIndex);
+
+        // Location relationships
+        modelBuilder.Entity<Location>()
+            .HasOne(l => l.Item)
+            .WithMany()
+            .HasForeignKey(l => l.ItemId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Location>()
+            .HasOne(l => l.LocationItem)
+            .WithMany()
+            .HasForeignKey(l => l.LocationItemId)
+            .OnDelete(DeleteBehavior.Restrict);
+
+        // Indexes for Location
+        modelBuilder.Entity<Location>()
+            .HasIndex(l => l.ItemId);
+
+        modelBuilder.Entity<Location>()
+            .HasIndex(l => l.LocationItemId);
+
+        modelBuilder.Entity<Location>()
+            .HasIndex(l => l.AddedAt);
+
+        modelBuilder.Entity<Location>()
+            .HasIndex(l => new { l.ItemId, l.Current });
 
         // LocationHistory relationships
         modelBuilder.Entity<LocationHistory>()

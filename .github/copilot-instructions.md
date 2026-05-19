@@ -222,3 +222,4 @@ The application uses a modern, responsive layout with fixed proportions:
 # IMPORTANT!!! When needed, use (see those files from the path):
 #ai_instructions/instructions.md
 #ai_instructions/instructions-details.md
+#ai_instructions/indexedDB.md

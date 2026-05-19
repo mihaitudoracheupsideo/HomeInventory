@@ -1,52 +1,113 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from "../components/ui/button";
+import { Button } from '../components/ui/button';
 import { usePageTitle } from '../contexts/PageTitleContext';
-import StatsCard from '../components/StatsCard';
-import ItemCard from '../components/ItemCard';
 import { getDashboardStats } from '../api/dashboardService';
-import type { IItem } from '../types/IItem';
+
+interface DashboardItemSummary {
+  id: string;
+  name: string;
+  uniqueCode?: string;
+  addedAt?: string;
+  updatedAt?: string;
+  itemType?: string;
+}
+
+interface DashboardStats {
+  totalItems: number;
+  totalContainers: number;
+  rootItems: number;
+  itemsWithoutParent: number;
+  itemsByType: Record<string, number>;
+  recentItems: DashboardItemSummary[];
+  recentlyScanned: DashboardItemSummary[];
+}
+
+const emptyStats: DashboardStats = {
+  totalItems: 0,
+  totalContainers: 0,
+  rootItems: 0,
+  itemsWithoutParent: 0,
+  itemsByType: {},
+  recentItems: [],
+  recentlyScanned: [],
+};
+
+const formatAbsoluteDate = (value?: string) => {
+  if (!value) {
+    return 'Unknown date';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Unknown date';
+  }
+
+  return new Intl.DateTimeFormat('en', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(date);
+};
+
+const formatRelativeDate = (value?: string) => {
+  if (!value) {
+    return 'Unknown time';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return 'Unknown time';
+  }
+
+  const diffMs = date.getTime() - Date.now();
+  const diffMinutes = Math.round(diffMs / (1000 * 60));
+  const absMinutes = Math.abs(diffMinutes);
+
+  if (absMinutes < 60) {
+    return `${absMinutes} min ago`;
+  }
+
+  const diffHours = Math.round(diffMinutes / 60);
+  const absHours = Math.abs(diffHours);
+
+  if (absHours < 24) {
+    return `${absHours}h ago`;
+  }
+
+  const diffDays = Math.round(diffHours / 24);
+  const absDays = Math.abs(diffDays);
+
+  if (absDays < 7) {
+    return `${absDays}d ago`;
+  }
+
+  return formatAbsoluteDate(value);
+};
 
 const Dashboard = () => {
-  const [recentItems, setRecentItems] = useState<IItem[]>([]);
-  const [stats, setStats] = useState({
-    totalItems: 0,
-    totalBoxes: 0,
-    totalLocations: 0,
-    recentItemsCount: 0,
-  });
+  const [stats, setStats] = useState<DashboardStats>(emptyStats);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
   const { setTitle } = usePageTitle();
 
   useEffect(() => {
-    setTitle("Dashboard");
+    setTitle('Dashboard');
   }, [setTitle]);
 
   useEffect(() => {
     const loadDashboardData = async () => {
       try {
-        // Load dashboard stats
-        const statsResponse = await getDashboardStats();
-        const dashboardStats = statsResponse.data;
-
+        const response = await getDashboardStats();
         setStats({
-          totalItems: dashboardStats.totalItems,
-          totalBoxes: dashboardStats.totalContainers,
-          totalLocations: dashboardStats.rootItems,
-          recentItemsCount: dashboardStats.recentItems.length,
+          ...emptyStats,
+          ...response.data,
         });
-
-        setRecentItems(dashboardStats.recentItems);
       } catch (error) {
         console.error('Error loading dashboard data:', error);
-        // Fallback to mock data if API fails
-        setStats({
-          totalItems: 0,
-          totalBoxes: 0,
-          totalLocations: 0,
-          recentItemsCount: 0,
-        });
+        setStats(emptyStats);
       } finally {
         setLoading(false);
       }
@@ -55,11 +116,16 @@ const Dashboard = () => {
     loadDashboardData();
   }, []);
 
+  const topItemTypes = useMemo(
+    () => Object.entries(stats.itemsByType).sort(([, left], [, right]) => right - left),
+    [stats.itemsByType],
+  );
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-500 mx-auto mb-4"></div>
+          <div className="mx-auto mb-4 h-12 w-12 animate-spin rounded-full border-b-2 border-primary-500"></div>
           <p className="text-gray-600">Loading dashboard...</p>
         </div>
       </div>
@@ -67,162 +133,194 @@ const Dashboard = () => {
   }
 
   return (
-    <div className="p-6 lg:p-8 max-w-7xl mx-auto">
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <StatsCard
-          title="Total Items"
-          value={stats.totalItems}
-          icon="📦"
-          trend={{ value: 12, positive: true }}
-        />
-        <StatsCard
-          title="Containers"
-          value={stats.totalBoxes}
-          icon="📦"
-          trend={{ value: 5, positive: true }}
-        />
-        <StatsCard
-          title="Root Items"
-          value={stats.totalLocations}
-          icon="📍"
-          trend={{ value: 2, positive: false }}
-        />
-        <StatsCard
-          title="Recent Items"
-          value={stats.recentItemsCount}
-          icon="🆕"
-        />
-      </div>
+    <div className="mx-auto max-w-7xl space-y-8 p-6 lg:p-8">
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-700 p-6 text-white shadow-soft lg:p-8">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-3xl space-y-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-slate-300">Inventory overview</p>
+            <h1 className="text-3xl font-semibold tracking-tight lg:text-4xl">See what changed recently and where your inventory is growing.</h1>
+            <p className="max-w-2xl text-sm text-slate-300 lg:text-base">
+              {stats.totalItems} total items across {Object.keys(stats.itemsByType).length} item types. {stats.recentItems.length} most recent additions are ready below.
+            </p>
+          </div>
 
-      {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        {/* Recent Items */}
-        <div className="lg:col-span-2">
-          <div className="bg-white rounded-2xl shadow-soft border border-gray-200 p-6">
-            <div className="flex items-center justify-between mb-6">
-              <h2 className="text-xl font-semibold text-gray-900">Recent Items</h2>
-              <Button
-                variant="ghost"
-                onClick={() => navigate('/objects')}
-                className="text-primary-600 hover:text-primary-700"
-              >
-                <span className="hidden sm:inline">View all →</span>
-                <span className="sm:hidden">→</span>
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={() => navigate('/mobile/add-item')} className="bg-white text-slate-900 hover:bg-slate-100">
+              Add Item
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/objects')} className="border-slate-500 bg-transparent text-white hover:bg-slate-800 hover:text-white">
+              Browse Items
+            </Button>
+            <Button variant="outline" onClick={() => navigate('/search')} className="border-slate-500 bg-transparent text-white hover:bg-slate-800 hover:text-white">
+              Search Inventory
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+          <p className="text-sm font-medium text-slate-500">Total items</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{stats.totalItems}</p>
+          <p className="mt-2 text-sm text-slate-600">Everything currently tracked in the inventory.</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+          <p className="text-sm font-medium text-slate-500">Containers</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{stats.totalContainers}</p>
+          <p className="mt-2 text-sm text-slate-600">Boxes or items that can hold other items.</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+          <p className="text-sm font-medium text-slate-500">Root items</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{stats.rootItems}</p>
+          <p className="mt-2 text-sm text-slate-600">Items stored at the top level with no parent item.</p>
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-soft">
+          <p className="text-sm font-medium text-slate-500">Unplaced items</p>
+          <p className="mt-2 text-3xl font-semibold text-slate-900">{stats.itemsWithoutParent}</p>
+          <p className="mt-2 text-sm text-slate-600">Standalone items that still need a container or location.</p>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.5fr_1fr]">
+        <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+          <div className="mb-6 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold text-slate-900">Last 10 items added</h2>
+              <p className="mt-1 text-sm text-slate-500">Newest additions, ordered by added date.</p>
+            </div>
+            <Button variant="ghost" onClick={() => navigate('/objects')} className="text-primary-600 hover:text-primary-700">
+              View all
+            </Button>
+          </div>
+
+          {stats.recentItems.length > 0 ? (
+            <div className="space-y-3">
+              {stats.recentItems.map((item, index) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => navigate(`/objects/${item.id}`)}
+                  className="flex w-full items-center gap-4 rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-primary-300 hover:bg-primary-50/50"
+                >
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-sm font-semibold text-slate-600">
+                    {String(index + 1).padStart(2, '0')}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate font-medium text-slate-900">{item.name}</p>
+                        <p className="text-sm text-slate-500">
+                          {item.itemType ?? 'Unknown type'}
+                          {item.uniqueCode ? ` • ${item.uniqueCode}` : ''}
+                        </p>
+                      </div>
+                      <div className="text-right text-sm text-slate-500">
+                        <p>{formatRelativeDate(item.addedAt)}</p>
+                        <p>{formatAbsoluteDate(item.addedAt)}</p>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-12 text-center">
+              <p className="text-lg font-medium text-slate-900">No items have been added yet.</p>
+              <p className="mt-2 text-sm text-slate-500">Start adding inventory and this section will show the latest 10 items.</p>
+              <Button onClick={() => navigate('/mobile/add-item')} className="mt-6">
+                Add the first item
+              </Button>
+            </div>
+          )}
+        </section>
+
+        <div className="space-y-8">
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div>
+                <h2 className="text-xl font-semibold text-slate-900">Items by type</h2>
+                <p className="mt-1 text-sm text-slate-500">Quick breakdown of where your inventory is concentrated.</p>
+              </div>
+              <Button variant="ghost" onClick={() => navigate('/object-types')} className="text-primary-600 hover:text-primary-700">
+                Manage types
               </Button>
             </div>
 
-            {recentItems.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {recentItems.map((item) => (
-                  <ItemCard
+            {topItemTypes.length > 0 ? (
+              <div className="space-y-3">
+                {topItemTypes.map(([typeName, count]) => {
+                  const percentage = stats.totalItems > 0 ? Math.round((count / stats.totalItems) * 100) : 0;
+
+                  return (
+                    <div key={typeName} className="rounded-2xl border border-slate-200 px-4 py-4">
+                      <div className="mb-3 flex items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium text-slate-900">{count} items in {typeName}</p>
+                          <p className="text-sm text-slate-500">{percentage}% of tracked inventory</p>
+                        </div>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{count}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100">
+                        <div className="h-2 rounded-full bg-slate-800" style={{ width: `${Math.max(percentage, count > 0 ? 6 : 0)}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="text-sm text-slate-500">No item type distribution is available yet.</p>
+            )}
+          </section>
+
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+            <h2 className="text-xl font-semibold text-slate-900">Recently updated</h2>
+            <p className="mt-1 text-sm text-slate-500">Most recently touched items, based on update time.</p>
+
+            {stats.recentlyScanned.length > 0 ? (
+              <div className="mt-5 space-y-3">
+                {stats.recentlyScanned.map((item) => (
+                  <button
                     key={item.id}
-                    item={item}
-                    className="transform hover:scale-105 transition-transform duration-200"
-                  />
+                    type="button"
+                    onClick={() => navigate(`/objects/${item.id}`)}
+                    className="flex w-full items-center justify-between gap-3 rounded-2xl border border-slate-200 px-4 py-4 text-left transition hover:border-primary-300 hover:bg-primary-50/50"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-medium text-slate-900">{item.name}</p>
+                      <p className="text-sm text-slate-500">
+                        {item.itemType ?? 'Unknown type'}
+                        {item.uniqueCode ? ` • ${item.uniqueCode}` : ''}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right text-sm text-slate-500">
+                      <p>{formatRelativeDate(item.updatedAt)}</p>
+                      <p>{formatAbsoluteDate(item.updatedAt)}</p>
+                    </div>
+                  </button>
                 ))}
               </div>
             ) : (
-              <div className="text-center py-12">
-                <div className="text-6xl mb-4">📦</div>
-                <h3 className="text-lg font-medium text-gray-900 mb-2">No items yet</h3>
-                <p className="text-gray-600 mb-6">Start by adding your first item to your inventory.</p>
-                <Button
-                  onClick={() => navigate('/objects/new')}
-                  className="bg-primary-500 hover:bg-primary-600"
-                >
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                  <span className="hidden sm:inline">Add Your First Item</span>
-                  <span className="sm:hidden">Add Item</span>
-                </Button>
-              </div>
+              <p className="mt-5 text-sm text-slate-500">No recent updates have been recorded yet.</p>
             )}
-          </div>
-        </div>
+          </section>
 
-        {/* Quick Actions & Activity */}
-        <div className="space-y-6">
-          {/* Quick Actions */}
-          <div className="bg-white rounded-2xl shadow-soft border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Actions</h3>
-            <div className="space-y-3">
-              <Button
-                variant="outline"
-                onClick={() => navigate('/objects/new')}
-                className="w-full justify-start bg-primary-50 hover:bg-primary-100 text-primary-700"
-              >
-                <div className="w-8 h-8 bg-primary-500 rounded-lg flex items-center justify-center text-white mr-3">
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                  </svg>
-                </div>
-                <span className="hidden sm:inline font-medium">Add New Item</span>
-                <span className="sm:hidden font-medium">Add Item</span>
+          <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">
+            <h2 className="text-xl font-semibold text-slate-900">Quick actions</h2>
+            <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-1">
+              <Button variant="outline" onClick={() => navigate('/mobile/add-item')} className="justify-start">
+                Add new item
               </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => navigate('/boxes/new')}
-                className="w-full justify-start bg-gray-50 hover:bg-gray-100 text-gray-700"
-              >
-                <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center text-white mr-3">
-                  📦
-                </div>
-                <span className="hidden sm:inline font-medium">Create Box</span>
-                <span className="sm:hidden font-medium">Box</span>
+              <Button variant="outline" onClick={() => navigate('/objects')} className="justify-start">
+                Review all items
               </Button>
-
-              <Button
-                variant="outline"
-                onClick={() => navigate('/locations/new')}
-                className="w-full justify-start bg-gray-50 hover:bg-gray-100 text-gray-700"
-              >
-                <div className="w-8 h-8 bg-gray-500 rounded-lg flex items-center justify-center text-white mr-3">
-                  📍
-                </div>
-                <span className="hidden sm:inline font-medium">Add Location</span>
-                <span className="sm:hidden font-medium">Location</span>
+              <Button variant="outline" onClick={() => navigate('/search')} className="justify-start">
+                Search by code or tag
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/object-types')} className="justify-start">
+                Review item types
               </Button>
             </div>
-          </div>
-
-          {/* Recent Activity */}
-          <div className="bg-white rounded-2xl shadow-soft border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h3>
-            <div className="space-y-4">
-              <div className="flex items-start space-x-3">
-                <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600 text-sm font-medium">
-                  ✓
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900">Added "Wireless Headphones" to Living Room</p>
-                  <p className="text-xs text-gray-500">2 hours ago</p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-3">
-                <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 text-sm font-medium">
-                  📦
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900">Created new box "Electronics"</p>
-                  <p className="text-xs text-gray-500">1 day ago</p>
-                </div>
-              </div>
-
-              <div className="flex items-start space-x-3">
-                <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 text-sm font-medium">
-                  📍
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm text-gray-900">Added location "Garage"</p>
-                  <p className="text-xs text-gray-500">3 days ago</p>
-                </div>
-              </div>
-            </div>
-          </div>
+          </section>
         </div>
       </div>
     </div>

@@ -133,6 +133,37 @@ namespace HomeInventory.Infrastructure.Migrations
                     b.ToTable("ItemType");
                 });
 
+            modelBuilder.Entity("HomeInventory.Domain.Entities.Location", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("AddedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Current")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("LocationItemId")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AddedAt");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("LocationItemId");
+
+                    b.HasIndex("ItemId", "Current");
+
+                    b.ToTable("Location");
+                });
+
             modelBuilder.Entity("HomeInventory.Domain.Entities.LocationHistory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -233,6 +264,25 @@ namespace HomeInventory.Infrastructure.Migrations
                     b.Navigation("Item");
 
                     b.Navigation("Tag");
+                });
+
+            modelBuilder.Entity("HomeInventory.Domain.Entities.Location", b =>
+                {
+                    b.HasOne("HomeInventory.Domain.Entities.Item", "Item")
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("HomeInventory.Domain.Entities.Item", "LocationItem")
+                        .WithMany()
+                        .HasForeignKey("LocationItemId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Item");
+
+                    b.Navigation("LocationItem");
                 });
 
             modelBuilder.Entity("HomeInventory.Domain.Entities.LocationHistory", b =>

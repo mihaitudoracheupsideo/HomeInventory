@@ -1,4 +1,4 @@
-using HomeInventory.Domain;
+using HomeInventory.Domain.Entities;
 using HomeInventory.Repository;
 using HomeInventory.Application;
 using Microsoft.AspNetCore.Mvc;
@@ -47,19 +47,25 @@ public class LocationsController : ControllerBase
     public async Task<IActionResult> GetLocationHistory(Guid itemId)
     {
         var locations = await _locationRepository.GetLocationHistoryForItemAsync(itemId);
-        return Ok(locations.Select(l => new
+        var orderedLocations = locations.OrderBy(l => l.AddedAt).ToList();
+        var timeline = orderedLocations.Select((location, index) => new
         {
-            l.ItemId,
-            l.LocationItemId,
-            l.AddedAt,
+            location.Id,
+            location.ItemId,
+            location.LocationItemId,
+            location.AddedAt,
+            EndedAt = index < orderedLocations.Count - 1 ? orderedLocations[index + 1].AddedAt : (DateTime?)null,
+            location.Current,
             LocationItem = new
             {
-                l.LocationItem?.Id,
-                l.LocationItem?.Name,
-                l.LocationItem?.Description,
-                l.LocationItem?.UniqueCode
+                location.LocationItem?.Id,
+                location.LocationItem?.Name,
+                location.LocationItem?.Description,
+                location.LocationItem?.UniqueCode
             }
-        }));
+        });
+
+        return Ok(timeline.Reverse());
     }
 
     // GET: api/locations/items/{locationItemId}
@@ -117,5 +123,5 @@ public class LocationsController : ControllerBase
 public class SetLocationRequest
 {
     public Guid ItemId { get; set; }
-    public Guid LocationItemId { get; set; }
+    public Guid? LocationItemId { get; set; }
 }

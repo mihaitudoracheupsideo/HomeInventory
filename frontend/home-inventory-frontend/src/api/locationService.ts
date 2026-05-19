@@ -1,14 +1,12 @@
-import axios from "axios";
-
-const API_BASE_URL = "http://localhost:5005/api";
+import { api } from "./api";
 
 export const getLocationHistory = async (itemId: string) => {
-  const response = await axios.get(`${API_BASE_URL}/locations/history/${itemId}`);
+  const response = await api.get(`/locations/history/${itemId}`);
   return response;
 };
 
-export const setCurrentLocation = async (itemId: string, locationItemId: string) => {
-  const response = await axios.post(`${API_BASE_URL}/locations`, {
+export const setCurrentLocation = async (itemId: string, locationItemId?: string) => {
+  const response = await api.post(`/locations`, {
     itemId,
     locationItemId,
   });
@@ -16,6 +14,6 @@ export const setCurrentLocation = async (itemId: string, locationItemId: string)
 };
 
 export const searchItems = async (searchTerm: string) => {
-  const response = await axios.get(`${API_BASE_URL}/items?search=${encodeURIComponent(searchTerm)}`);
+  const response = await api.get(`/items?search=${encodeURIComponent(searchTerm)}&pageSize=10`);
   return response;
 };

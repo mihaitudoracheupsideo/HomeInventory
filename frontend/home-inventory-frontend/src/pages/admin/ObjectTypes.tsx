@@ -24,7 +24,7 @@ import type { Action as ActionType } from "../../types/Enums";
 
 import { DataGrid, type GridColDef, type GridRenderCellParams } from "@mui/x-data-grid";
 import { Box, Stack } from "@mui/material";
-import { Edit, Plus, Save, X, Tag, FileText } from "lucide-react";
+import { Edit, Plus, Save, X, Tag, FileText, Palette } from "lucide-react";
 
 const ObjectTypesPage = () => {
   const [types, setTypes] = useState<IItemType[]>([]);
@@ -52,6 +52,21 @@ const ObjectTypesPage = () => {
       headerName: "Descriere",
       width: 150,
       editable: true,
+    },
+    {
+      field: "color",
+      headerName: "Culoare",
+      width: 130,
+      sortable: false,
+      renderCell: (params: GridRenderCellParams<IItemType>) => (
+        <div className="flex items-center gap-2">
+          <span
+            className="h-4 w-4 rounded-full border border-slate-300"
+            style={{ backgroundColor: params.row.color || '#000000' }}
+          />
+          <span className="text-xs text-slate-600">{params.row.color || '-'}</span>
+        </div>
+      ),
     },
     {
       field: "actions",
@@ -103,7 +118,7 @@ const ObjectTypesPage = () => {
     }
   };
 
-  const createEmptyType = (): IItemType => ({ id: "", name: "", description: "" });
+  const createEmptyType = (): IItemType => ({ id: "", name: "", description: "", color: "#000000" });
 
   const handleSaveEditPopup = (type: IItemType, action: ActionType): void => {
     setSelectedType(type);
@@ -209,6 +224,35 @@ const ObjectTypesPage = () => {
               />
               <p className="text-xs text-muted-foreground">
                 Descrierea ajută la identificarea tipului de obiect (max. 500 caractere)
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="editColor" className="flex items-center gap-2 text-sm font-medium">
+                <Palette className="h-4 w-4 text-muted-foreground" />
+                Culoare tip obiect
+              </Label>
+              <div className="flex items-center gap-3">
+                <Input
+                  id="editColor"
+                  type="color"
+                  value={selectedType?.color || "#000000"}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    selectedType && setSelectedType({ ...selectedType, color: e.target.value })
+                  }
+                  className="h-11 w-20 cursor-pointer p-1"
+                />
+                <Input
+                  value={selectedType?.color || "#000000"}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) =>
+                    selectedType && setSelectedType({ ...selectedType, color: e.target.value })
+                  }
+                  placeholder="#000000"
+                  className="h-11 flex-1"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Alegeți culoarea folosită când numele tipului este afișat în aplicație.
               </p>
             </div>
           </div>

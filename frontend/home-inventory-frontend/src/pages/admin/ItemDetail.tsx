@@ -18,6 +18,7 @@ import type { IItem } from "../../types/IItem";
 import type { ITag } from "../../types/ITag";
 import { Input, Textarea } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
+import ItemTypeName from "../../components/ItemTypeName";
 import QRCodeDisplay from "../../components/QRCodeDisplay";
 import ImagePreviewModal from "../../components/ImagePreviewModal";
 import LocationPopup from "../../components/LocationPopup";
@@ -29,6 +30,7 @@ import { Label } from "../../components/ui/label";
 import {
   DataGrid,
   type GridColDef,
+  type GridRenderCellParams,
   type GridRowParams,
   type GridRowSelectionModel,
   type MuiEvent,
@@ -68,6 +70,7 @@ const ItemDetailPage = () => {
   const [item, setItem] = useState<IItem | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingTags, setSavingTags] = useState(false);
   const [storedItems, setStoredItems] = useState<IItem[]>([]);
   const [itemTags, setItemTags] = useState<ITag[]>([]);
 
@@ -161,6 +164,9 @@ const ItemDetailPage = () => {
       headerName: "Tip",
       width: 150,
       valueGetter: (_value, row) => row.itemType?.name ?? "",
+      renderCell: (params: GridRenderCellParams<IItem>) => (
+        <ItemTypeName itemType={params.row.itemType} fallback="" variant="pill" />
+      ),
     },
     {
       field: "uniqueCode",
@@ -173,6 +179,54 @@ const ItemDetailPage = () => {
   useEffect(() => {
     void loadItem();
   }, [loadItem]);
+
+  const syncItemTags = useCallback(async (itemId: string, nextTagNames: string[]) => {
+    const tagIdsByName = new Map(itemTags.map((tag) => [tag.name.toLocaleUpperCase(), tag.id]));
+    const currentTagNames = itemTags.map((tag) => tag.name);
+
+    const tagsToAdd = nextTagNames.filter(
+      (tagName) => !currentTagNames.some((existingTagName) => existingTagName.toLocaleUpperCase() === tagName.toLocaleUpperCase())
+    );
+    const tagsToRemove = itemTags.filter(
+      (tag) => !nextTagNames.some((tagName) => tagName.toLocaleUpperCase() === tag.name.toLocaleUpperCase())
+    );
+
+    if (tagsToAdd.length > 0) {
+      await assignTagsToItem(itemId, tagsToAdd);
+    }
+
+    if (tagsToRemove.length > 0) {
+      await Promise.all(
+        tagsToRemove.map((tag) => removeTagFromItem(itemId, tag.id ?? tagIdsByName.get(tag.name.toLocaleUpperCase()) ?? ""))
+      );
+    }
+
+    const refreshedTagsResponse = await getItemTags(itemId);
+    const refreshedTags = refreshedTagsResponse.data ?? [];
+    setItemTags(refreshedTags);
+    setItem((currentItem) => currentItem ? { ...currentItem, tags: refreshedTags.map((tag) => tag.name) } : currentItem);
+  }, [itemTags]);
+
+  const handleTagsChanged = useCallback(async (nextTags: string[]) => {
+    if (!item?.id) {
+      return;
+    }
+
+    const previousTags = item.tags ?? [];
+
+    setItem((currentItem) => currentItem ? { ...currentItem, tags: nextTags } : currentItem);
+    setSavingTags(true);
+
+    try {
+      await syncItemTags(item.id, nextTags);
+    } catch (error) {
+      console.error("Error updating item tags", error);
+      setItem((currentItem) => currentItem ? { ...currentItem, tags: previousTags } : currentItem);
+      toast.error("Tag-urile nu au putut fi salvate.");
+    } finally {
+      setSavingTags(false);
+    }
+  }, [item, syncItemTags]);
 
   const handleStoredItemRowClick = (params: GridRowParams<IItem>, event: MuiEvent<React.MouseEvent>) => {
     if (event.ctrlKey || event.metaKey) {
@@ -209,17 +263,6 @@ const ItemDetailPage = () => {
 
     setSaving(true);
     try {
-      const tagIdsByName = new Map(itemTags.map((tag) => [tag.name.toLocaleUpperCase(), tag.id]));
-      const nextTagNames = item.tags ?? [];
-      const currentTagNames = itemTags.map((tag) => tag.name);
-
-      const tagsToAdd = nextTagNames.filter(
-        (tagName) => !currentTagNames.some((existingTagName) => existingTagName.toLocaleUpperCase() === tagName.toLocaleUpperCase())
-      );
-      const tagsToRemove = itemTags.filter(
-        (tag) => !nextTagNames.some((tagName) => tagName.toLocaleUpperCase() === tag.name.toLocaleUpperCase())
-      );
-
       await updateItem(item.id, {
         id: item.id,
         name: item.name,
@@ -229,19 +272,6 @@ const ItemDetailPage = () => {
         imagePath: item.imagePath,
         parentItemId: item.parentItemId,
       });
-
-      if (tagsToAdd.length > 0) {
-        await assignTagsToItem(item.id, tagsToAdd);
-      }
-
-      await Promise.all(
-        tagsToRemove.map((tag) => removeTagFromItem(item.id, tag.id ?? tagIdsByName.get(tag.name.toLocaleUpperCase()) ?? ''))
-      );
-
-      const refreshedTagsResponse = await getItemTags(item.id);
-      const refreshedTags = refreshedTagsResponse.data ?? [];
-      setItemTags(refreshedTags);
-      setItem((currentItem) => currentItem ? { ...currentItem, tags: refreshedTags.map((tag) => tag.name) } : currentItem);
 
       toast.success("Obiectul a fost salvat cu succes!");
       navigate("/objects");
@@ -354,11 +384,9 @@ const ItemDetailPage = () => {
                     <Tag className="h-4 w-4" />
                     <span className="font-mono text-sm font-medium">{item.uniqueCode}</span>
                   </div>
-                  <div className="flex items-center gap-2 bg-gradient-to-r from-emerald-500 to-teal-600 text-white px-4 py-2 rounded-full shadow-sm">
-                    <Package className="h-4 w-4" />
-                    <span className="text-sm font-medium">
-                      {item.itemType ? item.itemType.name : 'Tip necunoscut'}
-                    </span>
+                  <div className="flex items-center gap-2 px-1 py-1">
+                    <Package className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                    <ItemTypeName itemType={item.itemType} fallback="Tip necunoscut" variant="pill" className="text-sm" />
                   </div>
                 </div>
               </div>
@@ -480,13 +508,10 @@ const ItemDetailPage = () => {
                 value={item.tags ?? []}
                 label="Etichete"
                 placeholder="Alege un tag existent sau creează unul nou"
-                helperText="Tag-urile se salvează împreună cu modificările obiectului."
-                disabled={saving}
+                helperText={savingTags ? "Salvăm tag-urile..." : "Tag-urile se salvează imediat când adaugi sau elimini unul."}
+                disabled={saving || savingTags}
                 onChange={(nextTags) => {
-                  setItem({
-                    ...item,
-                    tags: nextTags,
-                  });
+                  void handleTagsChanged(nextTags);
                 }}
               />
             </div>

@@ -1,6 +1,7 @@
 import { Box, Typography, IconButton } from '@mui/material';
 import { ChevronRight, ExpandMore, Folder, FolderOpen } from '@mui/icons-material';
 import type { IItem } from '../types/IItem';
+import ItemTypeName from './ItemTypeName';
 
 interface ItemTreeNodeProps {
   item: IItem;
@@ -62,7 +63,7 @@ export default function ItemTreeNode({
         </Typography>
         {item.itemType && (
           <Typography variant="caption" sx={{ color: 'text.secondary', mr: 1 }}>
-            {item.itemType.name}
+            <ItemTypeName itemType={item.itemType} />
           </Typography>
         )}
       </Box>

@@ -31,6 +31,7 @@ import {
 import { Label } from "../../components/ui/label";
 import { Input, Textarea } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
+import ItemTypeName from "../../components/ItemTypeName";
 import { getItemTypes } from "../../api/itemTypeService";
 import { Action } from "../../types/Enums";
 import type { Action as ActionType } from "../../types/Enums";
@@ -162,6 +163,9 @@ const ObjectsPage = () => {
       headerName: "Tip",
       width: 150,
       valueGetter: (_value, row) => row.itemType?.name ?? "",
+      renderCell: (params: GridRenderCellParams<IItem>) => (
+        <ItemTypeName itemType={params.row.itemType} fallback="" />
+      ),
     },
     {
       field: "currentLocation",
@@ -261,9 +265,7 @@ const ObjectsPage = () => {
       width: 250,
       valueGetter: (_value, row) => row.itemType?.name ?? "Necunoscut",
       renderCell: (params: GridRenderCellParams<IItem>) => (
-        <span className="text-gray-600 dark:text-gray-400">
-          {params.value}
-        </span>
+        <ItemTypeName itemType={params.row.itemType} fallback="Necunoscut" className="text-gray-600 dark:text-gray-400" />
       ),
     },
   ];

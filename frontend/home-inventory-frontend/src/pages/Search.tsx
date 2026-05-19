@@ -16,6 +16,7 @@ import { Box, Chip, Stack } from "@mui/material";
 import { Input } from "../components/ui/input";
 import { Label } from "../components/ui/label";
 import { Button } from "../components/ui/button";
+import ItemTypeName from "../components/ItemTypeName";
 import TagInput from "../components/TagInput";
 import {
   Search,
@@ -310,6 +311,9 @@ const SearchPage = () => {
       minWidth: 150,
       flex: 0.8,
       valueGetter: (_value, row) => row.itemType?.name ?? "-",
+      renderCell: (params: GridRenderCellParams<IItem>) => (
+        <ItemTypeName itemType={params.row.itemType} fallback="-" />
+      ),
     },
     {
       field: "parent",

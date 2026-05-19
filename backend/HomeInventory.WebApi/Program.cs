@@ -18,7 +18,7 @@ builder.Services.AddControllers();
 // Adăugăm DbContext cu SQLite
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"),
-        b => b.MigrationsAssembly("HomeInventory.WebApi")));
+        b => b.MigrationsAssembly("HomeInventory.Infrastructure")));
 
 // Register repositories
 builder.Services.AddScoped<IItemRepository, ItemRepository>();

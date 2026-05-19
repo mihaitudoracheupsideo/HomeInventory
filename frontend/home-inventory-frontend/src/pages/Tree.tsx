@@ -4,6 +4,7 @@ import { usePageTitle } from "../contexts/PageTitleContext";
 import { getTree } from "../api/itemService";
 import type { IItem } from "../types/IItem";
 import { Button } from "../components/ui/button";
+import ItemTypeName from "../components/ItemTypeName";
 import { Input } from "../components/ui/input";
 import {
   ChevronRight,
@@ -237,7 +238,7 @@ const TreePage = () => {
               <div>
                 <div className="font-medium text-slate-900">{item.name}</div>
                 <div className="text-xs text-slate-500">
-                  {item.itemType?.name ?? "Fără tip"}
+                  <ItemTypeName itemType={item.itemType} fallback="Fără tip" />
                   {item.uniqueCode ? ` • ${item.uniqueCode}` : ""}
                 </div>
               </div>

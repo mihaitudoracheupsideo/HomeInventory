@@ -13,13 +13,20 @@ public class ItemsController : ControllerBase
 {
     private readonly IItemRepository _itemRepository;
     private readonly IItemTypeRepository _itemTypeRepository;
+    private readonly ILocationRepository _locationRepository;
     private readonly ITagService _tagService;
     private readonly IMemoryCache _cache;
 
-    public ItemsController(IItemRepository itemRepository, IItemTypeRepository itemTypeRepository, ITagService tagService, IMemoryCache cache)
+    public ItemsController(
+        IItemRepository itemRepository,
+        IItemTypeRepository itemTypeRepository,
+        ILocationRepository locationRepository,
+        ITagService tagService,
+        IMemoryCache cache)
     {
         _itemRepository = itemRepository;
         _itemTypeRepository = itemTypeRepository;
+        _locationRepository = locationRepository;
         _tagService = tagService;
         _cache = cache;
     }
@@ -111,7 +118,8 @@ public class ItemsController : ControllerBase
             {
                 item.ItemType.Id,
                 item.ItemType.Name,
-                item.ItemType.Description
+                item.ItemType.Description,
+                item.ItemType.Color
             } : null,
             ParentItemId = item.ParentItemId,
             parent = BuildLocationItem(item.Parent)
@@ -139,7 +147,8 @@ public class ItemsController : ControllerBase
             {
                 item.ItemType.Id,
                 item.ItemType.Name,
-                item.ItemType.Description
+                item.ItemType.Description,
+                item.ItemType.Color
             } : null,
             ParentItemId = item.ParentItemId,
             parent = BuildLocationItem(item.Parent)
@@ -295,7 +304,7 @@ public class ItemsController : ControllerBase
             Description = createItemDto.Description,
             ItemTypeId = createItemDto.ItemTypeId,
             ImagePath = createItemDto.ImagePath,
-            ParentItemId = createItemDto.ParentItemId,
+            ParentItemId = null,
             AddedAt = DateTime.UtcNow,
         };
         
@@ -305,6 +314,15 @@ public class ItemsController : ControllerBase
         Console.WriteLine($"Generated UniqueCode: {item.UniqueCode}");
         
         await _itemRepository.AddAsync(item);
+
+        if (createItemDto.ParentItemId.HasValue)
+        {
+            var locationCreated = await _locationRepository.SetCurrentLocationAsync(item.Id, createItemDto.ParentItemId);
+            if (!locationCreated)
+            {
+                return BadRequest("Failed to set initial location.");
+            }
+        }
         
         // Assign tags if provided
         if (createItemDto.Tags != null && createItemDto.Tags.Any())
@@ -340,11 +358,25 @@ public class ItemsController : ControllerBase
             return BadRequest("Invalid ItemTypeId. The specified item type does not exist.");
 
         // Update only the fields that can be changed
+        var locationChanged = existingItem.ParentItemId != updateItemDto.ParentItemId;
+
         existingItem.Name = updateItemDto.Name;
         existingItem.Description = updateItemDto.Description;
         existingItem.ItemTypeId = updateItemDto.ItemTypeId;
         existingItem.ImagePath = updateItemDto.ImagePath;
-        existingItem.ParentItemId = updateItemDto.ParentItemId;
+
+        if (locationChanged)
+        {
+            var updated = await _locationRepository.SetCurrentLocationAsync(existingItem.Id, updateItemDto.ParentItemId);
+            if (!updated)
+            {
+                return BadRequest("Failed to update location.");
+            }
+        }
+        else
+        {
+            existingItem.ParentItemId = updateItemDto.ParentItemId;
+        }
 
         await _itemRepository.UpdateAsync(existingItem);
         
