@@ -4,7 +4,8 @@ import type { IItem } from "../types/IItem";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
-import { searchItems, setCurrentLocation } from "../api/locationService";
+import { searchItems } from "../api/locationService";
+import { updateItemRecord } from "../repositories/itemRepository";
 import LocationHistory from "./LocationHistory";
 import { ArrowRightLeft, Edit3, Loader2, MapPinned, Search, X } from "lucide-react";
 
@@ -129,7 +130,14 @@ const LocationPopup = ({ isOpen, onClose, item, onLocationChanged }: LocationPop
     }
 
     try {
-      await setCurrentLocation(item.id, selectedLocation.id);
+      await updateItemRecord(item.id, {
+        name: item.name,
+        description: item.description,
+        itemTypeId: item.itemTypeId,
+        tags: item.tags ?? [],
+        imagePath: item.imagePath,
+        parentItemId: selectedLocation.id,
+      });
       setMessage({
         type: 'success',
         text: `Obiectul "${item.name}" a fost mutat în "${selectedLocation.name}".`

@@ -1,15 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRoutes } from "react-router-dom";
 import { routes } from "./routes";
 import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import { PageTitleProvider } from "./contexts/PageTitleContext";
 import { Toaster } from "react-hot-toast";
+import { initializeSyncService } from "./services/syncService";
 import "./styles/design-system.css";
 
 function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const menu = useRoutes(routes);
+
+  useEffect(() => {
+    initializeSyncService();
+  }, []);
 
   return (
     <PageTitleProvider>

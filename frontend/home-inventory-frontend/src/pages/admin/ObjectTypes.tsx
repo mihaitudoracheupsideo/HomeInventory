@@ -12,22 +12,17 @@ import {
 } from "../../components/ui/dialog";
 import { Input } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
-import {
-  createItemType,
-  deleteItemType,
-  getItemTypes,
-  updateItemType,
-} from "../../api/itemTypeService";
 import { Label } from "../../components/ui/label";
 import { Action } from "../../types/Enums";
 import type { Action as ActionType } from "../../types/Enums";
+import { useItemTypes } from "../../hooks/useLiveData";
+import { createItemTypeRecord, deleteItemTypeRecord, updateItemTypeRecord } from "../../repositories/itemTypeRepository";
 
 import { DataGrid, type GridColDef, type GridRenderCellParams } from "@mui/x-data-grid";
 import { Box, Stack } from "@mui/material";
 import { Edit, Plus, Save, X, Tag, FileText, Palette } from "lucide-react";
 
 const ObjectTypesPage = () => {
-  const [types, setTypes] = useState<IItemType[]>([]);
   const [selectedType, setSelectedType] = useState<IItemType | null>(null);
 
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -35,6 +30,7 @@ const ObjectTypesPage = () => {
 
   const [isAdding, setIsAdding] = useState(false);
   const { setTitle } = usePageTitle();
+  const types = useItemTypes() ?? [];
 
   useEffect(() => {
     setTitle("Tipuri Obiecte");
@@ -96,28 +92,6 @@ const ObjectTypesPage = () => {
     },
   ];
 
-  useEffect(() => {
-    // Simulate fetching data from an API
-    loadTypes();
-  }, []);
-
-  const loadTypes = async () => {
-    try {
-      const res = await getItemTypes();
-      const payload = res.data;
-      const pagedItems = Array.isArray(payload?.data) ? payload.data : payload;
-
-      if (Array.isArray(pagedItems)) {
-        setTypes(pagedItems);
-      } else {
-        console.error("Unexpected response shape when loading item types", payload);
-        setTypes([]);
-      }
-    } catch (err) {
-      console.error("Eroare la preluarea datelor", err);
-    }
-  };
-
   const createEmptyType = (): IItemType => ({ id: "", name: "", description: "", color: "#000000" });
 
   const handleSaveEditPopup = (type: IItemType, action: ActionType): void => {
@@ -133,12 +107,11 @@ const ObjectTypesPage = () => {
           // Add new type - exclude id field
           // eslint-disable-next-line @typescript-eslint/no-unused-vars
           const { id, ...typeData } = selectedType;
-          await createItemType(typeData);
+          await createItemTypeRecord(typeData);
         } else {
           // Update existing type
-          await updateItemType(selectedType.id, selectedType);
+          await updateItemTypeRecord(selectedType.id, selectedType);
         }
-        loadTypes();
       } catch (err) {
         console.error("Eroare la actualizare", err);
       }
@@ -154,8 +127,7 @@ const ObjectTypesPage = () => {
   const handleDelete = async () => {
     if (selectedType) {
       try {
-        await deleteItemType(selectedType.id);
-        loadTypes();
+        await deleteItemTypeRecord(selectedType.id);
       } catch (err) {
         console.error("Eroare la ștergere", err);
       }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -17,32 +17,12 @@ import {
   Image as ImageIcon,
   Timeline as TimelineIcon
 } from '@mui/icons-material';
-import { getItems } from '../api/itemService';
-import { getItemTypes } from '../api/itemTypeService';
-import type { IItem } from '../types/IItem';
-import type { IItemType } from '../types/IItemType';
+import { useItems, useItemTypes } from '../hooks/useLiveData';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [items, setItems] = useState<IItem[]>([]);
-  const [itemTypes, setItemTypes] = useState<IItemType[]>([]);
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [itemsResponse, itemTypesResponse] = await Promise.all([
-          getItems(),
-          getItemTypes()
-        ]);
-        setItems(itemsResponse.data.data || []);
-        setItemTypes(itemTypesResponse.data.data || []);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-      }
-    };
-
-    fetchData();
-  }, []);
+  const items = useItems() ?? [];
+  const itemTypes = useItemTypes() ?? [];
 
   // Calculate statistics
   const totalItems = items.length;

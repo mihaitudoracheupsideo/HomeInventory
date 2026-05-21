@@ -4,18 +4,11 @@ import type { ChangeEvent } from "react";
 import toast from "react-hot-toast";
 import {
   getItem,
-  updateItem,
   getItemByUniqueCode,
   getItems,
 } from "../../api/itemService";
-import {
-  assignTagsToItem,
-  getItemTags,
-  removeTagFromItem,
-} from "../../api/tagService";
 import { API_BASE_URL } from "../../api/api";
 import type { IItem } from "../../types/IItem";
-import type { ITag } from "../../types/ITag";
 import { Input, Textarea } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import ItemTypeName from "../../components/ItemTypeName";
@@ -47,6 +40,7 @@ import {
   AlertTriangle,
   Archive
 } from "lucide-react";
+import { updateItemRecord } from "../../repositories/itemRepository";
 
 const extractCollection = <T,>(payload: unknown): T[] => {
   if (Array.isArray(payload)) {
@@ -72,7 +66,6 @@ const ItemDetailPage = () => {
   const [saving, setSaving] = useState(false);
   const [savingTags, setSavingTags] = useState(false);
   const [storedItems, setStoredItems] = useState<IItem[]>([]);
-  const [itemTags, setItemTags] = useState<ITag[]>([]);
 
   // Modals
   const [showImageModal, setShowImageModal] = useState(false);
@@ -96,14 +89,7 @@ const ItemDetailPage = () => {
     try {
       const res = id ? await getItem(itemId) : await getItemByUniqueCode(uniqueCode!);
       const loadedItem = res.data as IItem;
-      setItem(loadedItem);
-
-      if (loadedItem.id) {
-        const tagsResponse = await getItemTags(loadedItem.id);
-        const loadedTags = tagsResponse.data ?? [];
-        setItemTags(loadedTags);
-        setItem((currentItem) => currentItem ? { ...currentItem, tags: loadedTags.map((tag) => tag.name) } : currentItem);
-      }
+      setItem({ ...loadedItem, tags: loadedItem.tags ?? [] });
     } catch (err) {
       console.error("Error fetching item", err);
     } finally {
@@ -180,33 +166,6 @@ const ItemDetailPage = () => {
     void loadItem();
   }, [loadItem]);
 
-  const syncItemTags = useCallback(async (itemId: string, nextTagNames: string[]) => {
-    const tagIdsByName = new Map(itemTags.map((tag) => [tag.name.toLocaleUpperCase(), tag.id]));
-    const currentTagNames = itemTags.map((tag) => tag.name);
-
-    const tagsToAdd = nextTagNames.filter(
-      (tagName) => !currentTagNames.some((existingTagName) => existingTagName.toLocaleUpperCase() === tagName.toLocaleUpperCase())
-    );
-    const tagsToRemove = itemTags.filter(
-      (tag) => !nextTagNames.some((tagName) => tagName.toLocaleUpperCase() === tag.name.toLocaleUpperCase())
-    );
-
-    if (tagsToAdd.length > 0) {
-      await assignTagsToItem(itemId, tagsToAdd);
-    }
-
-    if (tagsToRemove.length > 0) {
-      await Promise.all(
-        tagsToRemove.map((tag) => removeTagFromItem(itemId, tag.id ?? tagIdsByName.get(tag.name.toLocaleUpperCase()) ?? ""))
-      );
-    }
-
-    const refreshedTagsResponse = await getItemTags(itemId);
-    const refreshedTags = refreshedTagsResponse.data ?? [];
-    setItemTags(refreshedTags);
-    setItem((currentItem) => currentItem ? { ...currentItem, tags: refreshedTags.map((tag) => tag.name) } : currentItem);
-  }, [itemTags]);
-
   const handleTagsChanged = useCallback(async (nextTags: string[]) => {
     if (!item?.id) {
       return;
@@ -218,7 +177,14 @@ const ItemDetailPage = () => {
     setSavingTags(true);
 
     try {
-      await syncItemTags(item.id, nextTags);
+      await updateItemRecord(item.id, {
+        name: item.name,
+        description: item.description,
+        itemTypeId: item.itemTypeId,
+        tags: nextTags,
+        imagePath: item.imagePath,
+        parentItemId: item.parentItemId,
+      });
     } catch (error) {
       console.error("Error updating item tags", error);
       setItem((currentItem) => currentItem ? { ...currentItem, tags: previousTags } : currentItem);
@@ -226,7 +192,7 @@ const ItemDetailPage = () => {
     } finally {
       setSavingTags(false);
     }
-  }, [item, syncItemTags]);
+  }, [item]);
 
   const handleStoredItemRowClick = (params: GridRowParams<IItem>, event: MuiEvent<React.MouseEvent>) => {
     if (event.ctrlKey || event.metaKey) {
@@ -240,9 +206,16 @@ const ItemDetailPage = () => {
 
     try {
       // Update each selected item to set ParentItemId to null
-      const updatePromises = selectedStoredItemIds.map(itemId =>
-        updateItem(itemId, { parentItemId: undefined } as Partial<IItem>)
-      );
+      const updatePromises = storedItems
+        .filter((storedItem) => selectedStoredItemIds.includes(storedItem.id))
+        .map((storedItem) => updateItemRecord(storedItem.id, {
+          name: storedItem.name,
+          description: storedItem.description,
+          itemTypeId: storedItem.itemTypeId,
+          tags: storedItem.tags ?? [],
+          imagePath: storedItem.imagePath,
+          parentItemId: undefined,
+        }));
 
       await Promise.all(updatePromises);
 
@@ -263,12 +236,11 @@ const ItemDetailPage = () => {
 
     setSaving(true);
     try {
-      await updateItem(item.id, {
-        id: item.id,
+      await updateItemRecord(item.id, {
         name: item.name,
         description: item.description,
         itemTypeId: item.itemTypeId,
-        uniqueCode: item.uniqueCode,
+        tags: item.tags ?? [],
         imagePath: item.imagePath,
         parentItemId: item.parentItemId,
       });

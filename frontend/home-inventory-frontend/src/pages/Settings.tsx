@@ -3,11 +3,12 @@ import { Box, Typography, Paper, Tabs, Tab, Table, TableBody, TableCell, TableCo
 import { Add, Edit, Delete } from '@mui/icons-material';
 import toast from 'react-hot-toast';
 import { usePageTitle } from '../contexts/PageTitleContext';
-import { getItemTypes, createItemType, updateItemType, deleteItemType } from '../api/itemTypeService';
-import { getTags, createTag, updateTag, deleteTag } from '../api/tagService';
 import type { IItemType } from '../types/IItemType';
 import type { ITag, ITagPayload } from '../types/ITag';
 import { TAG_TYPE_OPTIONS, TagType } from '../types/ITag';
+import { useItemTypes, useTags } from '../hooks/useLiveData';
+import { createItemTypeRecord, deleteItemTypeRecord, updateItemTypeRecord } from '../repositories/itemTypeRepository';
+import { createTagRecord, deleteTagRecord, updateTagRecord } from '../repositories/tagRepository';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -33,9 +34,6 @@ function TabPanel(props: TabPanelProps) {
 
 const SettingsPage = () => {
   const [tabValue, setTabValue] = useState(0);
-  const [itemTypes, setItemTypes] = useState<IItemType[]>([]);
-  const [tags, setTags] = useState<ITag[]>([]);
-  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [tagDialogOpen, setTagDialogOpen] = useState(false);
   const [editingItemType, setEditingItemType] = useState<IItemType | null>(null);
@@ -56,40 +54,12 @@ const SettingsPage = () => {
     icon: '',
   });
   const { setTitle } = usePageTitle();
+  const itemTypes = useItemTypes() ?? [];
+  const tags = useTags() ?? [];
 
   useEffect(() => {
     setTitle("Settings");
   }, [setTitle]);
-
-  useEffect(() => {
-    void loadSettingsData();
-  }, []);
-
-  const loadSettingsData = async () => {
-    try {
-      await Promise.all([loadItemTypes(), loadTags()]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadItemTypes = async () => {
-    try {
-      const response = await getItemTypes();
-      setItemTypes(response.data.data || []);
-    } catch (error) {
-      console.error('Error loading item types:', error);
-    }
-  };
-
-  const loadTags = async () => {
-    try {
-      const response = await getTags();
-      setTags(response.data || []);
-    } catch (error) {
-      console.error('Error loading tags:', error);
-    }
-  };
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
@@ -157,11 +127,10 @@ const SettingsPage = () => {
   const handleSave = async () => {
     try {
       if (editingItemType) {
-        await updateItemType(editingItemType.id, formData);
+        await updateItemTypeRecord(editingItemType.id, formData);
       } else {
-        await createItemType(formData);
+        await createItemTypeRecord(formData);
       }
-      await loadItemTypes();
       handleCloseDialog();
     } catch (error) {
       console.error('Error saving item type:', error);
@@ -171,8 +140,7 @@ const SettingsPage = () => {
   const handleDelete = async (id: string) => {
     if (window.confirm('Are you sure you want to delete this item type?')) {
       try {
-        await deleteItemType(id);
-        await loadItemTypes();
+        await deleteItemTypeRecord(id);
       } catch (error) {
         console.error('Error deleting item type:', error);
       }
@@ -182,14 +150,13 @@ const SettingsPage = () => {
   const handleSaveTag = async () => {
     try {
       if (editingTag) {
-        await updateTag(editingTag.id, tagFormData);
+        await updateTagRecord(editingTag.id, tagFormData);
         toast.success('Tag updated successfully');
       } else {
-        await createTag(tagFormData);
+        await createTagRecord(tagFormData);
         toast.success('Tag created successfully');
       }
 
-      await loadTags();
       handleCloseTagDialog();
     } catch (error) {
       console.error('Error saving tag:', error);
@@ -204,23 +171,14 @@ const SettingsPage = () => {
 
     if (window.confirm(`Delete tag "${tag.name}"?`)) {
       try {
-        await deleteTag(tag.id);
+        await deleteTagRecord(tag.id);
         toast.success('Tag deleted successfully');
-        await loadTags();
       } catch (error) {
         console.error('Error deleting tag:', error);
         toast.error('Failed to delete tag');
       }
     }
   };
-
-  if (loading) {
-    return (
-      <Box sx={{ p: 3 }}>
-        <Typography>Loading settings...</Typography>
-      </Box>
-    );
-  }
 
   return (
     <Box sx={{ width: '100%' }}>

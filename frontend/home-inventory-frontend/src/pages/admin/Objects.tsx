@@ -3,23 +3,14 @@ import type { ChangeEvent, MouseEvent } from "react";
 import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { usePageTitle } from "../../contexts/PageTitleContext";
 import {
-  createItem,
-  deleteItem,
-  getItems,
-  updateItem,
   getItem,
   getItemsByLocation,
 } from "../../api/itemService";
-import {
-  assignTagsToItem,
-  getItemTags,
-  removeTagFromItem,
-} from "../../api/tagService";
 import { uploadImage } from "../../api/imageService";
 import { API_BASE_URL } from "../../api/api";
 import type { IItem } from "../../types/IItem";
-import type { ITag } from "../../types/ITag";
 import type { IItemType } from "../../types/IItemType";
+import { extractCollection } from "../../api/responseUtils";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +23,6 @@ import { Label } from "../../components/ui/label";
 import { Input, Textarea } from "../../components/ui/input";
 import { Button } from "../../components/ui/button";
 import ItemTypeName from "../../components/ItemTypeName";
-import { getItemTypes } from "../../api/itemTypeService";
 import { Action } from "../../types/Enums";
 import type { Action as ActionType } from "../../types/Enums";
 import {
@@ -58,31 +48,19 @@ import {
 } from "lucide-react";
 import LocationHierarchy from "../../components/LocationHierarchy";
 import TagInput from "../../components/TagInput";
-
-const extractCollection = <T,>(payload: unknown): T[] => {
-  if (Array.isArray(payload)) {
-    return payload as T[];
-  }
-
-  if (payload && typeof payload === "object") {
-    const dataProp = (payload as Record<string, unknown>).data ??
-      (payload as Record<string, unknown>).Data;
-    if (Array.isArray(dataProp)) {
-      return dataProp as T[];
-    }
-  }
-
-  return [];
-};
+import { useItems, useItemTypes } from "../../hooks/useLiveData";
+import { createItemRecord, deleteItemRecord, updateItemRecord } from "../../repositories/itemRepository";
 
 const ObjectsPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { setTitle } = usePageTitle();
-  const [items, setItems] = useState<IItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState<string>("");
+  const [searchInput, setSearchInput] = useState<string>("");
   const [selectedItem, setSelectedItem] = useState<IItem | null>(null);
-  const [itemTypes, setItemTypes] = useState<IItemType[]>([]);
+  const items = useItems(searchTerm) ?? [];
+  const itemTypes = useItemTypes() ?? [];
 
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -113,9 +91,6 @@ const ObjectsPage = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [uploadSize, setUploadSize] = useState<'original' | 'resized'>('original');
-
-  const [searchTerm, setSearchTerm] = useState<string>("");
-  const [searchInput, setSearchInput] = useState<string>("");
 
   // Set page title
   useEffect(() => {
@@ -279,48 +254,6 @@ const ObjectsPage = () => {
     imagePath: "",
   });
 
-  const loadItems = useCallback(async (search?: string) => {
-    try {
-      const res = await getItems(search);
-      const payload = extractCollection<IItem>(res.data);
-      const isRecognizedShape =
-        Array.isArray(res.data) ||
-        (res.data &&
-          typeof res.data === "object" &&
-          ("data" in (res.data as object) || "Data" in (res.data as object)));
-
-      if (isRecognizedShape) {
-        setItems(payload);
-      } else {
-        console.error("Unexpected response shape when loading items", res.data);
-        setItems([]);
-      }
-    } catch (err) {
-      console.error("Error fetching objects", err);
-    }
-  }, []);
-
-  const loadItemTypes = useCallback(async () => {
-    try {
-      const res = await getItemTypes();
-      const payload = extractCollection<IItemType>(res.data);
-      const isRecognizedShape =
-        Array.isArray(res.data) ||
-        (res.data &&
-          typeof res.data === "object" &&
-          ("data" in (res.data as object) || "Data" in (res.data as object)));
-
-      if (isRecognizedShape) {
-        setItemTypes(payload);
-      } else {
-        console.error("Unexpected response shape when loading item types", res.data);
-        setItemTypes([]);
-      }
-    } catch (err) {
-      console.error("Error fetching objects", err);
-    }
-  }, []);
-
   // Read search query from URL parameters
   useEffect(() => {
     const query = searchParams.get('q');
@@ -350,12 +283,6 @@ const ObjectsPage = () => {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    // Simulate fetching data from an API
-    void loadItems(searchTerm);
-    void loadItemTypes();
-  }, [loadItems, loadItemTypes, searchTerm]);
-
   const handleSearch = () => {
     setSearchTerm(searchInput);
   };
@@ -366,15 +293,6 @@ const ObjectsPage = () => {
   };
 
   const handleSaveEditPopup = async (object: IItem, action: ActionType): Promise<void> => {
-    // Ensure item types are loaded before opening the dialog
-    if (itemTypes.length === 0) {
-      try {
-        await loadItemTypes();
-      } catch (error) {
-        console.error("Failed to load item types:", error);
-      }
-    }
-
     setSelectedItem(action === Action.ADD ? createEmptyItem() : object);
     setSelectedFile(null);
     setUploadSize('original');
@@ -467,44 +385,23 @@ const ObjectsPage = () => {
           imagePath: selectedItem.imagePath,
           parentItemId: selectedItem.parentItemId,
         };
-        await createItem(itemData);
+        await createItemRecord(itemData);
       } else {
-        const currentItemTagsResponse = await getItemTags(selectedItem.id);
-        const currentItemTags = currentItemTagsResponse.data ?? [];
-        const nextTagNames = selectedItem.tags ?? [];
-        const currentTagNames = currentItemTags.map((tag: ITag) => tag.name);
-
-        const tagsToAdd = nextTagNames.filter(
-          (tagName) => !currentTagNames.some((existingTagName) => existingTagName.toLocaleUpperCase() === tagName.toLocaleUpperCase())
-        );
-        const tagsToRemove = currentItemTags.filter(
-          (tag: ITag) => !nextTagNames.some((tagName) => tagName.toLocaleUpperCase() === tag.name.toLocaleUpperCase())
-        );
-
-        // update item - only send the fields that can be updated
         const updateData = {
           name: selectedItem.name,
           description: selectedItem.description || null,
           itemTypeId: selectedItem.itemTypeId,
           imagePath: selectedItem.imagePath || null,
           parentItemId: selectedItem.parentItemId,
+          tags: selectedItem.tags ?? [],
         };
-        await updateItem(selectedItem.id, updateData);
-
-        if (tagsToAdd.length > 0) {
-          await assignTagsToItem(selectedItem.id, tagsToAdd);
-        }
-
-        await Promise.all(
-          tagsToRemove.map((tag: ITag) => removeTagFromItem(selectedItem.id, tag.id))
-        );
+        await updateItemRecord(selectedItem.id, updateData);
       }
       setShowEditDialog(false);
       setSelectedItem(null);
       setSelectedFile(null);
       setSelectedFile(null);
       cleanupAddParamFromUrl();
-      await loadItems(searchTerm);
     } catch (err) {
       console.error("Error updating object", err);
       const error = err as { response?: { data?: unknown } };
@@ -567,12 +464,9 @@ const ObjectsPage = () => {
     if (!selectedItem) return;
 
     try {
-      // Assuming you have a deleteItem API function
-      // You may need to import it: import { deleteItem } from '../../api/itemService';
-      await deleteItem(selectedItem.id);
+      await deleteItemRecord(selectedItem.id);
       setShowDeleteDialog(false);
       setSelectedItem(null);
-      await loadItems(searchTerm);
     } catch (err) {
       console.error("Error deleting object", err);
     }

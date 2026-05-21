@@ -17,5 +17,6 @@ export interface IItem {
   depth?: number;
   addedAt?: string;
   updatedAt?: string;
+  deleted?: boolean;
   childrenCount?: number;
 }

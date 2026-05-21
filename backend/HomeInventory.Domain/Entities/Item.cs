@@ -2,7 +2,7 @@
 
 namespace HomeInventory.Domain.Entities;
 
-public class Item
+public class Item : ISyncEntity
 {
     public Guid Id { get; set; }
 
@@ -37,6 +37,7 @@ public class Item
     // Audit fields
     public DateTime AddedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+    public bool Deleted { get; set; }
 
     // Navigation properties for location history
     public virtual ICollection<LocationHistory> LocationHistory { get; set; } = new List<LocationHistory>();

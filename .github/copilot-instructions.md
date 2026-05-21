@@ -223,3 +223,4 @@ The application uses a modern, responsive layout with fixed proportions:
 #ai_instructions/instructions.md
 #ai_instructions/instructions-details.md
 #ai_instructions/indexedDB.md
+#ai_instructions/alerts-module.md

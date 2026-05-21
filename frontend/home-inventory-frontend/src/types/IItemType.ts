@@ -7,4 +7,6 @@ export interface IItemType {
   isLeaf?: boolean;
   color?: string;
   sortOrder?: number;
+  updatedAt?: string;
+  deleted?: boolean;
 }

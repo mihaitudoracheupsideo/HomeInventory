@@ -30,6 +30,29 @@ public class TagRepository : Repository<Tag>, ITagRepository
             .FirstOrDefaultAsync(t => t.NormalizedName == normalizedName);
     }
 
+    public async Task<Tag?> GetByNormalizedNameIncludingDeletedAsync(string normalizedName)
+    {
+        return await _context.Tags
+            .IgnoreQueryFilters()
+            .FirstOrDefaultAsync(tag => tag.NormalizedName == normalizedName);
+    }
+
+    public async Task<IEnumerable<Tag>> GetChangesSinceAsync(DateTime? since = null)
+    {
+        var query = _context.Tags
+            .IgnoreQueryFilters()
+            .AsQueryable();
+
+        if (since.HasValue)
+        {
+            query = query.Where(tag => tag.UpdatedAt > since.Value);
+        }
+
+        return await query
+            .OrderBy(tag => tag.UpdatedAt)
+            .ToListAsync();
+    }
+
     public async Task<IEnumerable<Tag>> SearchAsync(string query, int maxResults = 10)
     {
         var normalizedQuery = query.ToUpperInvariant();

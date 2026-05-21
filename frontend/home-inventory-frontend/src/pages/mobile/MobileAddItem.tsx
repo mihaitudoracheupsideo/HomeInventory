@@ -1,14 +1,13 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { createItem } from "../../api/itemService";
 // import { uploadImage } from "../../api/imageService";
-import { getItemTypes } from "../../api/itemTypeService";
 // import type { IItem } from "../../types/IItem";
-import type { IItemType } from "../../types/IItemType";
 import { Button } from "../../components/ui/button";
 import { Input, Textarea } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import QRCodeDisplay from "../../components/QRCodeDisplay";
+import { useItemTypes } from "../../hooks/useLiveData";
+import { createItemRecord } from "../../repositories/itemRepository";
 import toast from "react-hot-toast";
 import {
   Camera,
@@ -29,7 +28,6 @@ const MobileAddItemPage = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [itemTypes, setItemTypes] = useState<IItemType[]>([]);
   const [isCameraActive, setIsCameraActive] = useState(false);
   const [capturedImages, setCapturedImages] = useState<string[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -38,6 +36,7 @@ const MobileAddItemPage = () => {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [showSuccess, setShowSuccess] = useState(false);
   const [createdItem, setCreatedItem] = useState<any>(null);
+  const itemTypes = useItemTypes() ?? [];
 
   // PWA Install prompt
   useEffect(() => {
@@ -76,22 +75,11 @@ const MobileAddItemPage = () => {
     tagsInput: ""
   });
 
-  // Load item types on mount
   useEffect(() => {
-    const loadItemTypes = async () => {
-      try {
-        const response = await getItemTypes();
-        setItemTypes(response.data || []);
-        if (response.data && response.data.length > 0) {
-          setFormData(prev => ({ ...prev, itemTypeId: response.data[0].id }));
-        }
-      } catch (error) {
-        console.error("Failed to load item types:", error);
-        toast.error("Eroare la încărcarea tipurilor de obiecte");
-      }
-    };
-    loadItemTypes();
-  }, []);
+    if (itemTypes.length > 0 && !formData.itemTypeId) {
+      setFormData((prev) => ({ ...prev, itemTypeId: itemTypes[0].id }));
+    }
+  }, [itemTypes, formData.itemTypeId]);
 
   // Start camera
   const startCamera = useCallback(async () => {
@@ -235,8 +223,7 @@ const MobileAddItemPage = () => {
         imagePath: imagePaths.length > 0 ? imagePaths[0] : null, // Use first image as main image
       };
 
-      const response = await createItem(itemData);
-      const createdItem = response.data;
+      const createdItem = await createItemRecord(itemData);
 
       setCreatedItem(createdItem);
       setShowSuccess(true);

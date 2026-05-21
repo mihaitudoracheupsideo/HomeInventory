@@ -4,8 +4,8 @@ import { Button } from "./ui/button";
 import { Label } from "./ui/label";
 import { API_BASE_URL } from '../api/api';
 import { uploadImage } from '../api/imageService';
-import { updateItem } from '../api/itemService';
 import type { IItem } from '../types/IItem';
+import { updateItemRecord } from '../repositories/itemRepository';
 import { Upload, X, Camera, Trash2, Save } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -32,7 +32,14 @@ const ImagePreviewModal = ({ isOpen, onClose, item, onItemUpdated }: ImagePrevie
 
     try {
       const updatedItem = { ...item, imagePath: undefined };
-      await updateItem(item.id, updatedItem);
+      await updateItemRecord(item.id, {
+        name: updatedItem.name,
+        description: updatedItem.description,
+        itemTypeId: updatedItem.itemTypeId,
+        tags: updatedItem.tags ?? [],
+        imagePath: undefined,
+        parentItemId: updatedItem.parentItemId,
+      });
       onItemUpdated(updatedItem);
       toast.success('Imaginea a fost ștearsă cu succes!');
     } catch (error) {
@@ -104,7 +111,14 @@ const ImagePreviewModal = ({ isOpen, onClose, item, onItemUpdated }: ImagePrevie
 
       const response = await uploadImage(selectedFile, item.uniqueCode, uploadParams.maxWidth, uploadParams.maxHeight);
       const updatedItem = { ...item, imagePath: response.data.imagePath };
-      await updateItem(item.id, updatedItem);
+      await updateItemRecord(item.id, {
+        name: updatedItem.name,
+        description: updatedItem.description,
+        itemTypeId: updatedItem.itemTypeId,
+        tags: updatedItem.tags ?? [],
+        imagePath: updatedItem.imagePath,
+        parentItemId: updatedItem.parentItemId,
+      });
       onItemUpdated(updatedItem);
       setSelectedFile(null);
       setShowUploadInterface(false);

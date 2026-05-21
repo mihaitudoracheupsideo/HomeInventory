@@ -20,6 +20,31 @@ public class ItemRepository : Repository<Item>, IItemRepository
         }
     }
 
+    public async Task<IEnumerable<Item>> GetChangesSinceAsync(DateTime? since = null)
+    {
+        var query = _context.Item
+            .IgnoreQueryFilters()
+            .Include(i => i.ItemType)
+            .Include(i => i.Parent)
+            .AsQueryable();
+
+        if (since.HasValue)
+        {
+            query = query.Where(item => item.UpdatedAt > since.Value);
+        }
+
+        var items = await query
+            .OrderBy(item => item.UpdatedAt)
+            .ToListAsync();
+
+        foreach (var item in items.Where(item => !item.Deleted && item.Parent != null))
+        {
+            await LoadFullParentChainAsync(item);
+        }
+
+        return items;
+    }
+
     public async Task<IEnumerable<Item>> GetItemsWithDependenciesAsync(string? search = null)
     {
         var query = _context.Item

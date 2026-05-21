@@ -1,11 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { usePageTitle } from "../contexts/PageTitleContext";
-import { advancedSearchItems, getItems } from "../api/itemService";
-import { getItemTypes } from "../api/itemTypeService";
 import { API_BASE_URL } from "../api/api";
 import type { IItem } from "../types/IItem";
-import type { IItemType } from "../types/IItemType";
 import {
   DataGrid,
   type GridColDef,
@@ -18,6 +15,7 @@ import { Label } from "../components/ui/label";
 import { Button } from "../components/ui/button";
 import ItemTypeName from "../components/ItemTypeName";
 import TagInput from "../components/TagInput";
+import { useItems, useItemTypes } from "../hooks/useLiveData";
 import {
   Search,
   Filter,
@@ -26,23 +24,6 @@ import {
   Image as ImageIcon,
   FolderTree,
 } from "lucide-react";
-
-const extractCollection = <T,>(payload: unknown): T[] => {
-  if (Array.isArray(payload)) {
-    return payload as T[];
-  }
-
-  if (payload && typeof payload === "object") {
-    const dataProp = (payload as Record<string, unknown>).data ??
-      (payload as Record<string, unknown>).Data;
-
-    if (Array.isArray(dataProp)) {
-      return dataProp as T[];
-    }
-  }
-
-  return [];
-};
 
 type TagMatchMode = "all" | "any";
 
@@ -57,19 +38,6 @@ interface SearchState {
   page: number;
   pageSize: number;
 }
-
-const extractTotalCount = (payload: unknown, fallback = 0) => {
-  if (payload && typeof payload === "object") {
-    const totalCount = (payload as Record<string, unknown>).totalCount ??
-      (payload as Record<string, unknown>).TotalCount;
-
-    if (typeof totalCount === "number") {
-      return totalCount;
-    }
-  }
-
-  return fallback;
-};
 
 const normalizeTags = (tags: string[]) => {
   const seen = new Set<string>();
@@ -156,11 +124,8 @@ const SearchPage = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const { setTitle } = usePageTitle();
   const searchState = useMemo(() => parseSearchState(searchParams), [searchParams]);
-  const [parentOptions, setParentOptions] = useState<IItem[]>([]);
-  const [results, setResults] = useState<IItem[]>([]);
-  const [totalCount, setTotalCount] = useState(0);
-  const [itemTypes, setItemTypes] = useState<IItemType[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const allItems = useItems() ?? [];
+  const itemTypes = useItemTypes() ?? [];
 
   const updateSearchState = (
     updates: Partial<SearchState>,
@@ -182,64 +147,75 @@ const SearchPage = () => {
     setTitle("Căutare avansată");
   }, [setTitle]);
 
-  useEffect(() => {
-    const loadFilterOptions = async () => {
-      try {
-        const [itemsResponse, itemTypesResponse] = await Promise.all([
-          getItems({ page: 1, pageSize: 1000 }),
-          getItemTypes(),
-        ]);
-
-        const loadedParentOptions = extractCollection<IItem>(itemsResponse.data);
-        const loadedTypes = extractCollection<IItemType>(itemTypesResponse.data);
-
-        setParentOptions(loadedParentOptions);
-        setItemTypes(loadedTypes);
-      } catch (error) {
-        console.error("Error loading search filter options", error);
-        setParentOptions([]);
-      }
-    };
-
-    void loadFilterOptions();
-  }, []);
-
-  useEffect(() => {
-    const loadResults = async () => {
-      setIsLoading(true);
-
-      try {
-        const response = await advancedSearchItems({
-          query: searchState.nameFilter.trim() || undefined,
-          tags: normalizeTags(searchState.selectedTags),
-          parentItemId: searchState.selectedParentId || undefined,
-          itemTypeId: searchState.selectedTypeId || undefined,
-          tagMatchMode: searchState.tagMatchMode,
-          rootOnly: searchState.rootOnly,
-          withImageOnly: searchState.withImageOnly,
-          page: searchState.page,
-          pageSize: searchState.pageSize,
-        });
-
-        const loadedResults = extractCollection<IItem>(response.data);
-        setResults(loadedResults);
-        setTotalCount(extractTotalCount(response.data, loadedResults.length));
-      } catch (error) {
-        console.error("Error loading advanced search results", error);
-        setResults([]);
-        setTotalCount(0);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    void loadResults();
-  }, [searchState]);
-
   const sortedParentOptions = useMemo(
-    () => parentOptions.slice().sort((left, right) => left.name.localeCompare(right.name, "ro")),
-    [parentOptions]
+    () => allItems.slice().sort((left, right) => left.name.localeCompare(right.name, "ro")),
+    [allItems]
   );
+
+  const filteredItems = useMemo(() => {
+    const normalizedQuery = searchState.nameFilter.trim().toLocaleLowerCase();
+    const normalizedSelectedTags = normalizeTags(searchState.selectedTags).map((tag) => tag.toLocaleUpperCase());
+
+    return allItems
+      .filter((item) => {
+        if (normalizedQuery) {
+          const haystacks = [
+            item.name,
+            item.description,
+            item.uniqueCode,
+            item.itemType?.name,
+            item.parent?.name,
+            ...(item.tags ?? []),
+          ];
+
+          const matchesQuery = haystacks.some(
+            (value) => typeof value === "string" && value.toLocaleLowerCase().includes(normalizedQuery)
+          );
+
+          if (!matchesQuery) {
+            return false;
+          }
+        }
+
+        if (searchState.selectedParentId && item.parentItemId !== searchState.selectedParentId) {
+          return false;
+        }
+
+        if (searchState.selectedTypeId && item.itemTypeId !== searchState.selectedTypeId) {
+          return false;
+        }
+
+        if (searchState.rootOnly && item.parentItemId) {
+          return false;
+        }
+
+        if (searchState.withImageOnly && !item.imagePath) {
+          return false;
+        }
+
+        if (normalizedSelectedTags.length > 0) {
+          const itemTags = (item.tags ?? []).map((tag) => tag.toLocaleUpperCase());
+          const matchesTags = searchState.tagMatchMode === "all"
+            ? normalizedSelectedTags.every((tag) => itemTags.includes(tag))
+            : normalizedSelectedTags.some((tag) => itemTags.includes(tag));
+
+          if (!matchesTags) {
+            return false;
+          }
+        }
+
+        return true;
+      })
+      .sort((left, right) => left.name.localeCompare(right.name, "ro"));
+  }, [allItems, searchState]);
+
+  const totalCount = filteredItems.length;
+  const results = useMemo(() => {
+    const startIndex = (searchState.page - 1) * searchState.pageSize;
+    return filteredItems.slice(startIndex, startIndex + searchState.pageSize);
+  }, [filteredItems, searchState.page, searchState.pageSize]);
+
+  const isLoading = false;
 
   const handleReset = () => {
     updateSearchState({

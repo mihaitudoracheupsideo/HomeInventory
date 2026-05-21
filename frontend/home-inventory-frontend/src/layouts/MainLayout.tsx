@@ -1,10 +1,9 @@
 import { NavLink, Outlet } from "react-router-dom";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Box, Typography, Divider, useMediaQuery, useTheme } from "@mui/material";
 import ItemExplorer from "../components/ItemExplorer";
-import { getItems } from "../api/itemService";
-import { getItemTypes } from "../api/itemTypeService";
 import type { IItem } from "../types/IItem";
+import { useItems, useItemTypes } from "../hooks/useLiveData";
 
 const getNavStyle = ({ isActive }: { isActive: boolean }) => {
   return `px-3 py-2 rounded ${isActive ? "bg-gray-700" : "hover:bg-gray-700"}`;
@@ -13,27 +12,13 @@ const getNavStyle = ({ isActive }: { isActive: boolean }) => {
 export default function MainLayout() {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up('lg'));
-  const [stats, setStats] = useState({ items: 0, itemTypes: 0 });
   const [selectedItem, setSelectedItem] = useState<IItem | null>(null);
-
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        const [itemsResponse, itemTypesResponse] = await Promise.all([
-          getItems(),
-          getItemTypes()
-        ]);
-        setStats({
-          items: itemsResponse.data.data?.length || 0,
-          itemTypes: itemTypesResponse.data.data?.length || 0
-        });
-      } catch (error) {
-        console.error('Error fetching stats:', error);
-      }
-    };
-
-    fetchStats();
-  }, []);
+  const items = useItems() ?? [];
+  const itemTypes = useItemTypes() ?? [];
+  const stats = {
+    items: items.length,
+    itemTypes: itemTypes.length,
+  };
 
   const handleItemSelect = (item: IItem) => {
     setSelectedItem(item);

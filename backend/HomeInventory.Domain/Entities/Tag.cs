@@ -13,7 +13,7 @@ public enum TagType
     Collection = 6
 }
 
-public class Tag
+public class Tag : ISyncEntity
 {
     public Guid Id { get; set; }
 
@@ -28,10 +28,14 @@ public class Tag
     public TagType Type { get; set; } = TagType.Generic;
 
     [StringLength(7)] // Hex color like #FF0000
-    public string? Color { get; set; }
+    public string Color { get; set; }
 
     [StringLength(50)]
-    public string? Icon { get; set; }
+    public string Icon { get; set; }
+
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public bool Deleted { get; set; }
 
     // Navigation properties
     public virtual ICollection<ItemTag> ItemTags { get; set; } = new List<ItemTag>();

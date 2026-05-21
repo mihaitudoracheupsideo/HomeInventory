@@ -1,5 +1,6 @@
 using HomeInventory.Application;
 using HomeInventory.Domain.Entities;
+using HomeInventory.Repository;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HomeInventory.WebApi.Controllers;
@@ -9,10 +10,12 @@ namespace HomeInventory.WebApi.Controllers;
 public class TagsController : ControllerBase
 {
     private readonly ITagService _tagService;
+    private readonly ITagRepository _tagRepository;
 
-    public TagsController(ITagService tagService)
+    public TagsController(ITagService tagService, ITagRepository tagRepository)
     {
         _tagService = tagService;
+        _tagRepository = tagRepository;
     }
 
     private static TagDto ToTagDto(Tag tag)
@@ -49,6 +52,37 @@ public class TagsController : ControllerBase
         var tags = await _tagService.GetAllTagsWithUsageAsync();
         var tagDtos = tags.Select(ToTagListItemDto);
         return Ok(tagDtos);
+    }
+
+    [HttpGet("sync")]
+    public async Task<IActionResult> Sync([FromQuery] DateTime? since = null)
+    {
+        var tags = await _tagRepository.GetChangesSinceAsync(since);
+        var usageCounts = await Task.WhenAll(tags.Select(async tag => new
+        {
+            Tag = tag,
+            UsageCount = tag.Deleted ? 0 : await _tagRepository.GetUsageCountAsync(tag.Id)
+        }));
+
+        var filteredTags = usageCounts.Select(result => new
+            {
+                result.Tag.Id,
+                result.Tag.Name,
+                result.Tag.NormalizedName,
+                result.Tag.Type,
+                result.Tag.Color,
+                result.Tag.Icon,
+                result.Tag.UpdatedAt,
+                result.Tag.Deleted,
+                result.UsageCount,
+                CanDelete = result.UsageCount == 0,
+            });
+
+        return Ok(new SyncResponse<object>
+        {
+            Data = filteredTags,
+            SyncTimestamp = DateTime.UtcNow,
+        });
     }
 
     [HttpGet("search")]

@@ -4,6 +4,7 @@ namespace HomeInventory.Repository;
 
 public interface IItemRepository : IRepository<Item>
 {
+    Task<IEnumerable<Item>> GetChangesSinceAsync(DateTime? since = null);
     Task<IEnumerable<Item>> GetItemsWithDependenciesAsync(string? search = null);
     Task<IEnumerable<Item>> AdvancedSearchAsync(
         string? query = null,

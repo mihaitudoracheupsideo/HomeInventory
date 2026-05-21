@@ -3,6 +3,10 @@ import type { ITag, ITagPayload } from '../types/ITag';
 
 export const getTags = () => api.get<ITag[]>('/tags');
 
+export const getTagsSync = (since?: string) => api.get('/tags/sync', {
+  params: since ? { since } : undefined,
+});
+
 export const searchTags = (query: string, maxResults = 10) =>
   api.get<ITag[]>('/tags/search', {
     params: {

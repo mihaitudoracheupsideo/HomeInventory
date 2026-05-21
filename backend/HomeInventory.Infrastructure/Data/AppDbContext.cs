@@ -24,8 +24,14 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Item>()
             .HasKey(i => i.Id);
 
+        modelBuilder.Entity<Item>()
+            .HasQueryFilter(item => !item.Deleted);
+
         modelBuilder.Entity<ItemType>()
             .HasKey(ot => ot.Id);
+
+        modelBuilder.Entity<ItemType>()
+            .HasQueryFilter(itemType => !itemType.Deleted);
 
         modelBuilder.Entity<Location>()
             .HasKey(l => l.Id);
@@ -36,6 +42,9 @@ public class AppDbContext : DbContext
         // Tag configuration
         modelBuilder.Entity<Tag>()
             .HasKey(t => t.Id);
+
+        modelBuilder.Entity<Tag>()
+            .HasQueryFilter(tag => !tag.Deleted);
 
         modelBuilder.Entity<Tag>()
             .HasIndex(t => t.NormalizedName)
@@ -64,8 +73,26 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<Item>()
             .HasIndex(i => i.Name);
 
+        modelBuilder.Entity<Item>()
+            .HasIndex(i => i.UpdatedAt);
+
+        modelBuilder.Entity<Item>()
+            .HasIndex(i => i.Deleted);
+
         modelBuilder.Entity<ItemType>()
             .HasIndex(it => it.Name);
+
+        modelBuilder.Entity<ItemType>()
+            .HasIndex(itemType => itemType.UpdatedAt);
+
+        modelBuilder.Entity<ItemType>()
+            .HasIndex(itemType => itemType.Deleted);
+
+        modelBuilder.Entity<Tag>()
+            .HasIndex(tag => tag.UpdatedAt);
+
+        modelBuilder.Entity<Tag>()
+            .HasIndex(tag => tag.Deleted);
 
         // Item relationships
         modelBuilder.Entity<Item>()
@@ -139,13 +166,22 @@ public class AppDbContext : DbContext
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
-        foreach (var entry in ChangeTracker.Entries<Item>())
+        foreach (var entry in ChangeTracker.Entries<ISyncEntity>())
         {
+            if (entry.State == EntityState.Deleted)
+            {
+                entry.State = EntityState.Modified;
+                entry.Entity.Deleted = true;
+                entry.Entity.UpdatedAt = DateTime.UtcNow;
+                continue;
+            }
+
             if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
             {
                 entry.Entity.UpdatedAt = DateTime.UtcNow;
             }
         }
+
         return await base.SaveChangesAsync(cancellationToken);
     }
 }

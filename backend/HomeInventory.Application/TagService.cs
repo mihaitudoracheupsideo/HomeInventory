@@ -15,6 +15,7 @@ public interface ITagService
     Task<Tag> UpdateTagAsync(Guid id, UpdateTagDto dto);
     Task<bool> DeleteTagAsync(Guid id);
     Task AssignTagsToItemAsync(Guid itemId, IEnumerable<string> tagNames);
+    Task ReplaceItemTagsAsync(Guid itemId, IEnumerable<string> tagNames);
     Task RemoveTagFromItemAsync(Guid itemId, Guid tagId);
     Task<IEnumerable<Tag>> GetItemTagsAsync(Guid itemId);
 }
@@ -43,10 +44,23 @@ public class TagService : ITagService
         var normalizedName = _tagNormalizer.Normalize(dto.Name);
 
         // Check if tag already exists
-        var existingTag = await _tagRepository.GetByNormalizedNameAsync(normalizedName);
+        var existingTag = await _tagRepository.GetByNormalizedNameIncludingDeletedAsync(normalizedName);
         if (existingTag != null)
         {
-            throw new InvalidOperationException($"Tag with name '{dto.Name}' already exists.");
+            if (!existingTag.Deleted)
+            {
+                throw new InvalidOperationException($"Tag with name '{dto.Name}' already exists.");
+            }
+
+            existingTag.Name = dto.Name;
+            existingTag.NormalizedName = normalizedName;
+            existingTag.Type = dto.Type;
+            existingTag.Color = dto.Color;
+            existingTag.Icon = dto.Icon;
+            existingTag.Deleted = false;
+
+            await _tagRepository.UpdateAsync(existingTag);
+            return existingTag;
         }
 
         var tag = new Tag
@@ -99,10 +113,23 @@ public class TagService : ITagService
         var normalizedName = _tagNormalizer.Normalize(dto.Name);
 
         // Check if another tag with the same normalized name exists
-        var existingTag = await _tagRepository.GetByNormalizedNameAsync(normalizedName);
+        var existingTag = await _tagRepository.GetByNormalizedNameIncludingDeletedAsync(normalizedName);
         if (existingTag != null && existingTag.Id != id)
         {
-            throw new InvalidOperationException($"Tag with name '{dto.Name}' already exists.");
+            if (!existingTag.Deleted)
+            {
+                throw new InvalidOperationException($"Tag with name '{dto.Name}' already exists.");
+            }
+
+            existingTag.Name = dto.Name;
+            existingTag.NormalizedName = normalizedName;
+            existingTag.Type = dto.Type;
+            existingTag.Color = dto.Color;
+            existingTag.Icon = dto.Icon;
+            existingTag.Deleted = false;
+
+            await _tagRepository.UpdateAsync(existingTag);
+            return existingTag;
         }
 
         tag.Name = dto.Name;
@@ -147,7 +174,7 @@ public class TagService : ITagService
             if (string.IsNullOrEmpty(normalizedName))
                 continue;
 
-            var tag = await _tagRepository.GetByNormalizedNameAsync(normalizedName);
+            var tag = await _tagRepository.GetByNormalizedNameIncludingDeletedAsync(normalizedName);
             if (tag == null)
             {
                 // Create new tag
@@ -159,6 +186,14 @@ public class TagService : ITagService
                     Type = TagType.Generic
                 };
                 await _tagRepository.AddAsync(tag);
+            }
+            else if (tag.Deleted)
+            {
+                tag.Name = tagName.Trim();
+                tag.NormalizedName = normalizedName;
+                tag.Type = TagType.Generic;
+                tag.Deleted = false;
+                await _tagRepository.UpdateAsync(tag);
             }
 
             // Check if relationship already exists
@@ -173,6 +208,27 @@ public class TagService : ITagService
                 await _itemTagRepository.AddAsync(itemTag);
             }
         }
+    }
+
+    public async Task ReplaceItemTagsAsync(Guid itemId, IEnumerable<string> tagNames)
+    {
+        var normalizedTagNames = tagNames
+            .Where(tagName => !string.IsNullOrWhiteSpace(tagName))
+            .Select(tagName => tagName.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        var currentTags = (await GetItemTagsAsync(itemId)).ToArray();
+        var tagsToRemove = currentTags
+            .Where(tag => !normalizedTagNames.Any(tagName => string.Equals(tagName, tag.Name, StringComparison.OrdinalIgnoreCase)))
+            .ToArray();
+
+        foreach (var tag in tagsToRemove)
+        {
+            await RemoveTagFromItemAsync(itemId, tag.Id);
+        }
+
+        await AssignTagsToItemAsync(itemId, normalizedTagNames);
     }
 
     public async Task RemoveTagFromItemAsync(Guid itemId, Guid tagId)

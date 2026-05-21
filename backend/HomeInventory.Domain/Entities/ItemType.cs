@@ -1,7 +1,7 @@
 using System.ComponentModel.DataAnnotations;
 
 namespace HomeInventory.Domain.Entities;
-public class ItemType
+public class ItemType : ISyncEntity
 {
     public Guid Id { get; set; }
 
@@ -23,6 +23,10 @@ public class ItemType
     public string Color { get; set; }
 
     public int SortOrder { get; set; }
+
+    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+
+    public bool Deleted { get; set; }
 
     //public ICollection<Item> Items { get; set; }
 }

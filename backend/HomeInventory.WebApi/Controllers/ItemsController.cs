@@ -61,6 +61,19 @@ public class ItemsController : ControllerBase
         return Ok(new PaginatedResponse<object> { Data = paginated, TotalCount = items!.Count() });
     }
 
+    [HttpGet("sync")]
+    public async Task<IActionResult> Sync([FromQuery] DateTime? since = null)
+    {
+        var items = await _itemRepository.GetChangesSinceAsync(since);
+        var projectedItems = await Task.WhenAll(items.Select(ProjectSyncItemAsync));
+
+        return Ok(new SyncResponse<object>
+        {
+            Data = projectedItems,
+            SyncTimestamp = DateTime.UtcNow,
+        });
+    }
+
     [HttpGet("advanced-search")]
     public async Task<IActionResult> AdvancedSearch(
         [FromQuery] string? query = null,
@@ -113,13 +126,17 @@ public class ItemsController : ControllerBase
             Tags = await GetItemTagNamesAsync(item.Id),
             item.ImagePath,
             item.AddedAt,
+            item.UpdatedAt,
+            item.Deleted,
             ItemTypeId = item.ItemTypeId,
             ItemType = item.ItemType != null ? new
             {
                 item.ItemType.Id,
                 item.ItemType.Name,
                 item.ItemType.Description,
-                item.ItemType.Color
+                item.ItemType.Color,
+                item.ItemType.UpdatedAt,
+                item.ItemType.Deleted,
             } : null,
             ParentItemId = item.ParentItemId,
             parent = BuildLocationItem(item.Parent)
@@ -142,13 +159,17 @@ public class ItemsController : ControllerBase
             Tags = await GetItemTagNamesAsync(item.Id),
             item.ImagePath,
             item.AddedAt,
+            item.UpdatedAt,
+            item.Deleted,
             ItemTypeId = item.ItemTypeId,
             ItemType = item.ItemType != null ? new
             {
                 item.ItemType.Id,
                 item.ItemType.Name,
                 item.ItemType.Description,
-                item.ItemType.Color
+                item.ItemType.Color,
+                item.ItemType.UpdatedAt,
+                item.ItemType.Deleted,
             } : null,
             ParentItemId = item.ParentItemId,
             parent = BuildLocationItem(item.Parent)
@@ -383,7 +404,7 @@ public class ItemsController : ControllerBase
         // Update tags if provided
         if (updateItemDto.Tags != null)
         {
-            await _tagService.AssignTagsToItemAsync(existingItem.Id, updateItemDto.Tags);
+            await _tagService.ReplaceItemTagsAsync(existingItem.Id, updateItemDto.Tags);
         }
 
         // Clear all item-related cache entries
@@ -487,6 +508,49 @@ public class ItemsController : ControllerBase
         return await Task.WhenAll(items.Select(ProjectItemAsync));
     }
 
+    private async Task<object> ProjectSyncItemAsync(Item item)
+    {
+        if (item.Deleted)
+        {
+            return new
+            {
+                item.Id,
+                item.UpdatedAt,
+                item.Deleted,
+            };
+        }
+
+        return new
+        {
+            item.Id,
+            item.Name,
+            item.Description,
+            item.UniqueCode,
+            Tags = await GetItemTagNamesAsync(item.Id),
+            item.ImagePath,
+            item.AddedAt,
+            item.UpdatedAt,
+            item.Deleted,
+            ItemTypeId = item.ItemTypeId,
+            ItemType = item.ItemType != null && !item.ItemType.Deleted ? new
+            {
+                item.ItemType.Id,
+                item.ItemType.Name,
+                item.ItemType.Description,
+                item.ItemType.Icon,
+                item.ItemType.CanContainItems,
+                item.ItemType.IsLeaf,
+                item.ItemType.Color,
+                item.ItemType.SortOrder,
+                item.ItemType.UpdatedAt,
+                item.ItemType.Deleted,
+            } : null,
+            ParentItemId = item.ParentItemId,
+            parent = item.Parent != null && !item.Parent.Deleted ? BuildLocationItem(item.Parent) : null,
+            ChildrenCount = await _itemRepository.GetChildrenCountAsync(item.Id)
+        };
+    }
+
     private async Task<object> ProjectItemAsync(Item item)
     {
         return new
@@ -498,12 +562,16 @@ public class ItemsController : ControllerBase
             Tags = await GetItemTagNamesAsync(item.Id),
             item.ImagePath,
             item.AddedAt,
+            item.UpdatedAt,
+            item.Deleted,
             ItemTypeId = item.ItemTypeId,
             ItemType = item.ItemType != null ? new
             {
                 item.ItemType.Id,
                 item.ItemType.Name,
-                item.ItemType.Description
+                item.ItemType.Description,
+                item.ItemType.UpdatedAt,
+                item.ItemType.Deleted,
             } : null,
             ParentItemId = item.ParentItemId,
             parent = BuildLocationItem(item.Parent),

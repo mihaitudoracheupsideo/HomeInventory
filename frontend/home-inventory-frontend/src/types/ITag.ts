@@ -19,6 +19,8 @@ export interface ITag {
   icon?: string | null;
   usageCount?: number;
   canDelete?: boolean;
+  updatedAt?: string;
+  deleted?: boolean;
 }
 
 export interface ITagPayload {

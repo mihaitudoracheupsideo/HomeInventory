@@ -32,6 +32,31 @@ namespace HomeInventory.WebApi.Controllers
             return Ok(new PaginatedResponse<ItemType> { Data = paginated, TotalCount = itemTypes!.Count() });
         }
 
+        [HttpGet("sync")]
+        public async Task<IActionResult> Sync([FromQuery] DateTime? since = null)
+        {
+            var itemTypes = await _itemTypeRepository.GetChangesSinceAsync(since);
+            var response = new SyncResponse<object>
+            {
+                Data = itemTypes.Select(itemType => new
+                {
+                    itemType.Id,
+                    itemType.Name,
+                    itemType.Description,
+                    itemType.Icon,
+                    itemType.CanContainItems,
+                    itemType.IsLeaf,
+                    itemType.Color,
+                    itemType.SortOrder,
+                    itemType.UpdatedAt,
+                    itemType.Deleted,
+                }),
+                SyncTimestamp = DateTime.UtcNow,
+            };
+
+            return Ok(response);
+        }
+
         // GET: api/ItemTypes/{id}
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(Guid id)
