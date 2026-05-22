@@ -14,6 +14,8 @@ const Sidebar = ({ isOpen, onClose }: SidebarProps) => {
 
   const menuItems = useMemo(() => [
     { id: 'dashboard', label: 'Dashboard', title: 'Dashboard', icon: '📊', path: '/' },
+    { id: 'alerts', label: 'Alerts', title: 'Alerts', icon: '⏰', path: '/alerts' },
+    { id: 'alertDefinitions', label: 'Alert Rules', title: 'Alert Definitions', icon: '🧭', path: '/admin/alert-definitions' },
     { id: 'items', label: 'Obiecte', title: 'Obiecte', icon: '📦', path: '/objects' },
     { id: 'itemTypes', label: 'Tipuri obiecte', title: 'Tipuri obiecte', icon: '📦', path: '/object-types' },
     { id: 'tree', label: 'Tree', title: 'Arbore obiecte', icon: '🌳', path: '/tree' },

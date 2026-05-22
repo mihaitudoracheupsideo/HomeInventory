@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '../components/ui/button';
+import { ActiveAlertsWidget } from '../components/alerts/ActiveAlertsWidget';
 import { usePageTitle } from '../contexts/PageTitleContext';
 import { getDashboardStats } from '../api/dashboardService';
 
@@ -180,6 +181,8 @@ const Dashboard = () => {
           <p className="mt-2 text-sm text-slate-600">Standalone items that still need a container or location.</p>
         </div>
       </section>
+
+      <ActiveAlertsWidget />
 
       <div className="grid grid-cols-1 gap-8 xl:grid-cols-[1.5fr_1fr]">
         <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-soft">

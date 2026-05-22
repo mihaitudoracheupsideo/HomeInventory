@@ -3,6 +3,7 @@ using System;
 using HomeInventory.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace HomeInventory.Infrastructure.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260521104609_AddAlertsModule")]
+    partial class AddAlertsModule
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.8");
@@ -87,67 +90,6 @@ namespace HomeInventory.Infrastructure.Migrations
                         .IsUnique();
 
                     b.ToTable("AlertDefinitions");
-                });
-
-            modelBuilder.Entity("HomeInventory.Domain.Entities.Alerts.AlertNotificationSettings", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("EmailEnabled")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("FromEmail")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("FromName")
-                        .HasMaxLength(120)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("HtmlTemplate")
-                        .IsRequired()
-                        .HasMaxLength(12000)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("RecipientsJson")
-                        .IsRequired()
-                        .HasMaxLength(4000)
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("SmtpEnableSsl")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("SmtpHost")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SmtpPasswordProtected")
-                        .HasMaxLength(4000)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("SmtpPort")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("SmtpUsername")
-                        .HasMaxLength(256)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SubjectTemplate")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("AlertNotificationSettings");
                 });
 
             modelBuilder.Entity("HomeInventory.Domain.Entities.Alerts.AlertOccurrence", b =>

@@ -1,5 +1,6 @@
 ﻿using HomeInventory.Domain;
 using HomeInventory.Domain.Entities;
+using HomeInventory.Domain.Entities.Alerts;
 using Microsoft.EntityFrameworkCore;
 
 namespace HomeInventory.Infrastructure;
@@ -15,6 +16,9 @@ public class AppDbContext : DbContext
     public DbSet<LocationHistory> LocationHistory { get; set; }
     public DbSet<Tag> Tags { get; set; }
     public DbSet<ItemTag> ItemTags { get; set; }
+    public DbSet<AlertDefinition> AlertDefinitions { get; set; }
+    public DbSet<AlertOccurrence> AlertOccurrences { get; set; }
+    public DbSet<AlertNotificationSettings> AlertNotificationSettings { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -162,6 +166,82 @@ public class AppDbContext : DbContext
 
         modelBuilder.Entity<LocationHistory>()
             .HasIndex(lh => new { lh.ItemId, lh.AddedAt });
+
+        modelBuilder.Entity<AlertDefinition>()
+            .HasKey(definition => definition.Id);
+
+        modelBuilder.Entity<AlertDefinition>()
+            .HasIndex(definition => new { definition.SourceModule, definition.Name })
+            .IsUnique();
+
+        modelBuilder.Entity<AlertDefinition>()
+            .HasIndex(definition => definition.IsEnabled);
+
+        modelBuilder.Entity<AlertDefinition>()
+            .Property(definition => definition.Name)
+            .HasMaxLength(120);
+
+        modelBuilder.Entity<AlertDefinition>()
+            .Property(definition => definition.SourceModule)
+            .HasMaxLength(80);
+
+        modelBuilder.Entity<AlertDefinition>()
+            .Property(definition => definition.MessageTemplate)
+            .HasMaxLength(500);
+
+        modelBuilder.Entity<AlertOccurrence>()
+            .HasKey(occurrence => occurrence.Id);
+
+        modelBuilder.Entity<AlertOccurrence>()
+            .HasOne(occurrence => occurrence.AlertDefinition)
+            .WithMany(definition => definition.Occurrences)
+            .HasForeignKey(occurrence => occurrence.AlertDefinitionId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<AlertOccurrence>()
+            .HasIndex(occurrence => new { occurrence.AlertDefinitionId, occurrence.PeriodKey })
+            .IsUnique();
+
+        modelBuilder.Entity<AlertOccurrence>()
+            .HasIndex(occurrence => new { occurrence.Status, occurrence.DueAtUtc });
+
+        modelBuilder.Entity<AlertOccurrence>()
+            .HasIndex(occurrence => new { occurrence.AlertDefinitionId, occurrence.Status });
+
+        modelBuilder.Entity<AlertNotificationSettings>()
+            .HasKey(settings => settings.Id);
+
+        modelBuilder.Entity<AlertNotificationSettings>()
+            .Property(settings => settings.FromEmail)
+            .HasMaxLength(256);
+
+        modelBuilder.Entity<AlertNotificationSettings>()
+            .Property(settings => settings.FromName)
+            .HasMaxLength(120);
+
+        modelBuilder.Entity<AlertNotificationSettings>()
+            .Property(settings => settings.RecipientsJson)
+            .HasMaxLength(4000);
+
+        modelBuilder.Entity<AlertNotificationSettings>()
+            .Property(settings => settings.SmtpHost)
+            .HasMaxLength(256);
+
+        modelBuilder.Entity<AlertNotificationSettings>()
+            .Property(settings => settings.SmtpUsername)
+            .HasMaxLength(256);
+
+        modelBuilder.Entity<AlertNotificationSettings>()
+            .Property(settings => settings.SmtpPasswordProtected)
+            .HasMaxLength(4000);
+
+        modelBuilder.Entity<AlertNotificationSettings>()
+            .Property(settings => settings.SubjectTemplate)
+            .HasMaxLength(200);
+
+        modelBuilder.Entity<AlertNotificationSettings>()
+            .Property(settings => settings.HtmlTemplate)
+            .HasMaxLength(12000);
     }
 
     public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
@@ -179,6 +259,40 @@ public class AppDbContext : DbContext
             if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
             {
                 entry.Entity.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<AlertDefinition>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAtUtc = DateTime.UtcNow;
+            }
+
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAtUtc = DateTime.UtcNow;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<AlertOccurrence>())
+        {
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAtUtc = DateTime.UtcNow;
+            }
+        }
+
+        foreach (var entry in ChangeTracker.Entries<AlertNotificationSettings>())
+        {
+            if (entry.State == EntityState.Added)
+            {
+                entry.Entity.CreatedAtUtc = DateTime.UtcNow;
+            }
+
+            if (entry.State == EntityState.Added || entry.State == EntityState.Modified)
+            {
+                entry.Entity.UpdatedAtUtc = DateTime.UtcNow;
             }
         }
 

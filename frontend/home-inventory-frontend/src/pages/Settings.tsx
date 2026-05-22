@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Box, Typography, Paper, Tabs, Tab, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, TextField, Button, IconButton, Dialog, DialogTitle, DialogContent, DialogActions, MenuItem, Chip } from '@mui/material';
 import { Add, Edit, Delete } from '@mui/icons-material';
 import toast from 'react-hot-toast';
+import AlertNotificationSettingsPanel from '../components/settings/AlertNotificationSettingsPanel';
 import { usePageTitle } from '../contexts/PageTitleContext';
 import type { IItemType } from '../types/IItemType';
 import type { ITag, ITagPayload } from '../types/ITag';
@@ -187,6 +188,7 @@ const SettingsPage = () => {
       <Paper sx={{ width: '100%' }}>
         <Tabs value={tabValue} onChange={handleTabChange} aria-label="settings tabs">
           <Tab label="General" />
+          <Tab label="Notifications" />
           <Tab label="Item Types" />
           <Tab label="Tags" />
           <Tab label="QR Settings" />
@@ -200,6 +202,11 @@ const SettingsPage = () => {
         </TabPanel>
 
         <TabPanel value={tabValue} index={1}>
+          <Typography variant="h6" sx={{ mb: 2 }}>Alert Notifications</Typography>
+          <AlertNotificationSettingsPanel />
+        </TabPanel>
+
+        <TabPanel value={tabValue} index={2}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">Item Types Management</Typography>
             <Button
@@ -259,7 +266,7 @@ const SettingsPage = () => {
           </TableContainer>
         </TabPanel>
 
-        <TabPanel value={tabValue} index={2}>
+        <TabPanel value={tabValue} index={3}>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
             <Typography variant="h6">Tags Management</Typography>
             <Button
@@ -334,7 +341,7 @@ const SettingsPage = () => {
           </TableContainer>
         </TabPanel>
 
-        <TabPanel value={tabValue} index={3}>
+        <TabPanel value={tabValue} index={4}>
           <Typography variant="h6">QR Code Settings</Typography>
           <Typography variant="body2" color="text.secondary">
             QR code generation settings will be implemented here.
